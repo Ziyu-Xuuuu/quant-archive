@@ -89,9 +89,13 @@ python main.py
 1. 策略收益曲线对比。
 2. 每个策略的最终收益率统计。
 
-## 贡献
+## Appendix
 
-欢迎提交Issue或Pull Request来改进此项目。
+https://github.com/wondertrader/wondertrader
+https://github.com/UFund-Me/Qbot
+https://github.com/yutiansut/QUANTAXIS
+https://github.com/hugo2046/QuantsPlaybook
+https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%E4%BA%A4%E6%98%93%E5%B9%B3%E5%8F%B0
 
 ## 许可证
 
