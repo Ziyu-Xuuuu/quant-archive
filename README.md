@@ -105,4 +105,5 @@ https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%
 
 - 修改：在strategies中bollinger和ma等等需要转到交易策略中，跟预测策略随机组合
 - nlp_sentiment: 加上每个预测策略，权重给股民，大V，政府。
+- 中金看课：如何训练模型
 
