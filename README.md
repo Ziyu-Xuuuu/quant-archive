@@ -1,43 +1,57 @@
-# 股票交易回测项目
+# Quantitative polymerization model （量化聚合模型）
 
-本项目是一个基于多种策略的股票交易回测框架，支持多种模型（如Transformer、LSTM、HMM）生成交易信号，并进行回测分析。
+本项目是一个基于多种策略的量化交易框架，支持多种模型生成交易信号，并进行回测分析。
 
 ## 功能简介
 
-- **多模型支持**：包括Transformer、LSTM、HMM模型的交易信号生成。
+- **多模型支持**：包括多种模型的交易信号生成。
 - **策略回测**：支持多种交易策略的回测并比较收益率。
-- **可视化**：绘制回测结果的收益曲线。
 - **GPU加速**：支持TensorFlow和PyTorch的GPU加速。
 
 ## 文件结构
 
 ```
-Stock_Trade/
-├── data/               # 存放股票历史数据
-├── utils/              # 工具文件夹（模型保存、加载等）
-├── strategies/         # 策略实现代码
-│   ├── base_strategy.py
-│   └── meta_model_strategy.py
-├── backtest/           # 回测模块
+STOCK_QUANT/
+├── backtest/           # 回测模块，用于回测模型效果
 │   └── backtester.py
+├── config/             # 证券接入模块，用于与真实市场接入
+│   └── config.py
+├── data/               # 存放股票历史数据，作为数据集使用
+│   └── 股票代码.csv
+├── live/               # 交易模块，根据预测决定买卖行为
+│   └── trade.py
+├── Stock/              # 暂无
+├── strategies/         # 预测模块，包含多种常用模型
+│   └── xxmodel_strategy.py
+├── utils/              # 预训练文件夹（模型保存、预训练等）
+│   ├── models          # 模型参数
+│   └── train           # 模型预训练
 ├── main.py             # 项目主入口
-└── README.md           # 项目说明文件
+├── README.md           # 项目说明文件
+└── requirement.txt     # 环境配置参数
 ```
 
-## 安装依赖
+## 环境配置（以stock_quant_env这个虚拟环境为例）
 
-### 使用Conda生成依赖文件
+### 使用Conda生成新隔离环境
 
 ```bash
-conda env export --no-builds > requirements.txt
+conda create --name stock_quant_env python=3.10.16
+```
+
+### 激活虚拟环境
+
+```bash
+conda activate stock_quant_env
 ```
 
 ### 安装依赖
 
-使用以下命令安装项目所需的Python依赖：
+分别使用以下命令安装项目所需的Python依赖和C依赖，具体需要见requirements. txt：
 
 ```bash
-pip install -r requirements.txt
+pip install       # python相关依赖
+conda install     # C相关依赖
 ```
 
 ## 快速开始
@@ -45,13 +59,13 @@ pip install -r requirements.txt
 1. 克隆项目：
 
 ```bash
-git clone https://github.com/your-username/Stock_Trade.git
+git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
 ```
 
 2. 进入项目目录：
 
 ```bash
-cd Stock_Trade
+cd Stock_Quant
 ```
 
 3. 运行主程序：
