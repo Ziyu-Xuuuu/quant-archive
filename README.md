@@ -2,13 +2,13 @@
 
 本项目是一个基于多种策略的量化交易框架，支持多种模型生成交易信号，并进行回测分析。
 
-## 功能简介
+## Ⅰ. 功能简介
 
 - **多模型支持**：包括多种模型的交易信号生成。
 - **策略回测**：支持多种交易策略的回测并比较收益率。
 - **GPU加速**：支持TensorFlow和PyTorch的GPU加速。
 
-## 文件结构
+## Ⅱ. 文件结构
 
 ```
 STOCK_QUANT/
@@ -31,50 +31,44 @@ STOCK_QUANT/
 └── requirement.txt     # 环境配置参数
 ```
 
-## 环境配置（以stock_quant_env这个虚拟环境为例）
+## Ⅲ. 环境配置（以stock_quant_env这个虚拟环境为例）
 
-### 使用Conda生成新隔离环境
+### 1. 使用Conda生成新隔离环境
 
 ```bash
 conda create --name stock_quant_env python=3.10.16
 ```
 
-### 激活虚拟环境
+### 2. 激活虚拟环境
 
 ```bash
 conda activate stock_quant_env
 ```
 
-### 安装依赖
+### 3. 安装依赖
 
-分别使用以下命令安装项目所需的Python依赖和C依赖，具体需要见requirements. txt：
+分别使用以下命令安装项目所需的Python依赖和C依赖，具体见requirements. txt：
 
 ```bash
 pip install       # python相关依赖
 conda install     # C相关依赖
 ```
 
-## 快速开始
+## Ⅳ.快速开始
 
-1. 克隆项目：
+### 1. 克隆项目
 
 ```bash
 git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
 ```
 
-2. 进入项目目录：
+### 2. 进入项目目录
 
 ```bash
 cd Stock_Quant
 ```
 
-3. 运行主程序：
-
-```bash
-python main.py
-```
-
-## 模型说明
+## Ⅴ. 模型说明
 
 ### Transformer 模型
 基于PyTorch实现的简单Transformer模型，用于捕捉股票数据中的时间序列特征。
@@ -85,35 +79,50 @@ python main.py
 ### HMM 模型
 基于Hidden Markov Model（HMM）的模型，用于建模股票价格的隐含状态转移。
 
-## 回测策略
+## Ⅵ. 回测策略
 
 ### MetaModel 策略
 - 动态选择LSTM、Transformer或HMM模型，根据最近的市场波动和收益率特征选择最优模型。
 - 使用生成的信号进行回测分析。
 
-## 注意事项
-
-- 请确保您的数据文件位于`data/`目录下，格式包括`open`、`high`、`low`、`close`、`vol`等列。
-- 若需要启用GPU，请确保您的环境已正确配置CUDA。
-
-## 示例结果
+## Ⅷ. 示例结果
 
 回测运行后将生成以下可视化结果：
 
 1. 策略收益曲线对比。
 2. 每个策略的最终收益率统计。
 
-## Appendix
+
+## *常见问题（请大家将各自遇到的配置问题加入以便其他协作者使用）
+
+### 1.环境配置时我的cmd出bug了
+
+```
+直接复制粘贴报错内容给GPT，一般问题与解决策略包括但不限于：
+-缺少必要前置环境，如C++ Windows；Pytorch等，按照教程官网安装即可，同时麻烦将需要前置条件的库在requirement.txt备注中说明。
+-网速过慢，安装库所需时间以小时计。这可能与梯子有关，按照GPT提供的用国内镜像网址安装即可。
+-环境冲突（现在经过改版的requirement.txt正常来说可以避免）。请按照GPT建议的进行环境升降级，同时麻烦将最后正确的环境型号加入到requirement.txt文件中去。
+```
+
+### 2.我的git出bug了
+
+```
+一般问题与解决策略包括但不限于：
+-网速过慢，出现 "Failed to connect to github.com port 443 after 21051 ms: Could not connect to server"。这可能与梯子有关，请打开科学上网进行配置，同时需要vpn全局代理否则cmd窗口命令行仍然无法代理。
+若实在走投无路，可以直接从 https://github.com/Ziyu-Xuuuu/Stock_Quant.git 下载代码到本地应急，但是将无法实时编辑。
+-成功克隆到本地但是编辑后无法上传，提示未给Git配置账号。打开所用软件（Vscode, Pycharm等）终端，输入以下代码：
+git config --global user.name "你的用户名"
+git config --global user.email "你的邮箱"
+来进行全局git配置
+```
+
+## *Appendix
 
 https://github.com/wondertrader/wondertrader
 https://github.com/UFund-Me/Qbot
 https://github.com/yutiansut/QUANTAXIS
 https://github.com/hugo2046/QuantsPlaybook
 https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%E4%BA%A4%E6%98%93%E5%B9%B3%E5%8F%B0
-
-## 许可证
-
-本项目基于MIT许可证发布。
 
 ## 20250119计划变动
 
