@@ -26,6 +26,7 @@ STOCK_QUANT/
 ├── utils/              # 预训练文件夹（模型保存、预训练等）
 │   ├── models          # 模型参数
 │   └── train           # 模型预训练
+├── work log            # 工作日志
 ├── main.py             # 项目主入口
 ├── README.md           # 项目说明文件
 └── requirement.txt     # 环境配置参数
@@ -68,16 +69,19 @@ git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
 cd Stock_Quant
 ```
 
-## Ⅴ. 模型说明
+## Ⅴ. 模型介绍
 
-### Transformer 模型
-基于PyTorch实现的简单Transformer模型，用于捕捉股票数据中的时间序列特征。
+### 1. 预测模型
 
-### LSTM 模型
-使用TensorFlow实现的LSTM模型，适合处理时间序列数据。
+- Transformer 模型
+- LSTM 模型
+- HMM 模型
 
-### HMM 模型
-基于Hidden Markov Model（HMM）的模型，用于建模股票价格的隐含状态转移。
+### 2. 交易策略
+
+- bollinger 策略
+- 双均线策略
+- MACD策略
 
 ## Ⅵ. 回测策略
 
