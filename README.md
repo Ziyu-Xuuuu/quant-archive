@@ -55,6 +55,20 @@ pip install       # python相关依赖
 conda install     # C相关依赖
 ```
 
+### 4. 环境配置及维护方法的更新
+
+我已将requirement.txt更新整理为Stock_Quant_environment.yml。可直接通过以下代码创建符合依赖要求的conda environment
+
+```
+conda env create -f Stock_Quant_environment.yml
+```
+或通过以下代码更新环境以达到修改过后的依赖要求
+```
+conda env update -f Stock_Quant_environment.yml --name Stock_Quant_environment
+```
+建议此后环境依赖的更新都在此.yml文件中进行
+（注：此方法仍存在bug，在调试成功后会另行说明）
+
 ## Ⅳ.快速开始
 
 ### 1. 克隆项目
