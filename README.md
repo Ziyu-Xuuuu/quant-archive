@@ -120,6 +120,12 @@ git config --global user.email "你的邮箱"
 来进行全局git配置
 ```
 
+### 3.关于requirement.txt的建议
+
+```
+建议将python和
+```
+
 ## *Appendix
 
 https://github.com/wondertrader/wondertrader
