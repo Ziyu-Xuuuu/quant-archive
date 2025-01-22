@@ -57,7 +57,7 @@ conda install     # C相关依赖
 
 ### 4. 环境配置及维护方法的更新
 
-我已将requirement.txt更新整理为Stock_Quant_environment.yml。可直接通过以下代码创建符合依赖要求的conda environment
+现已将requirement.txt更新整理为Stock_Quant_environment.yml。可直接通过以下代码创建符合依赖要求的conda environment
 
 ```
 conda env create -f Stock_Quant_environment.yml
