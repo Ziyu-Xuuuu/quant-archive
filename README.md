@@ -67,6 +67,7 @@ conda env create -f Stock_Quant_environment.yml
 conda env update -f Stock_Quant_environment.yml --name Stock_Quant_environment
 ```
 建议此后环境依赖的更新都在此.yml文件中进行
+（注：此方法仍存在bug，在调试成功后会另行说明）
 
 ## Ⅳ.快速开始
 
