@@ -62,10 +62,13 @@ conda install     # C相关依赖
 ```
 conda env create -f Stock_Quant_environment.yml
 ```
+
 或通过以下代码更新环境以达到修改过后的依赖要求
+
 ```
 conda env update -f Stock_Quant_environment.yml --name Stock_Quant_environment
 ```
+
 建议此后环境依赖的更新都在此.yml文件中进行
 （注：此方法仍存在bug，在调试成功后会另行说明）
 
@@ -100,6 +103,7 @@ cd Stock_Quant
 ## Ⅵ. 回测策略
 
 ### MetaModel 策略
+
 - 动态选择LSTM、Transformer或HMM模型，根据最近的市场波动和收益率特征选择最优模型。
 - 使用生成的信号进行回测分析。
 
@@ -109,7 +113,6 @@ cd Stock_Quant
 
 1. 策略收益曲线对比。
 2. 每个策略的最终收益率统计。
-
 
 ## *常见问题（请大家将各自遇到的配置问题加入以便其他协作者使用）
 
@@ -141,10 +144,3 @@ https://github.com/UFund-Me/Qbot
 https://github.com/yutiansut/QUANTAXIS
 https://github.com/hugo2046/QuantsPlaybook
 https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%E4%BA%A4%E6%98%93%E5%B9%B3%E5%8F%B0
-
-## 20250119计划变动
-
-- 修改：在strategies中bollinger和ma等等需要转到交易策略中，跟预测策略随机组合
-- nlp_sentiment: 加上每个预测策略，权重给股民，大V，政府。
-- 中金看课：如何训练模型
-
