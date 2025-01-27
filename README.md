@@ -34,11 +34,18 @@ STOCK_QUANT/
 
 ## Ⅲ. 环境配置（以stock_quant_env这个虚拟环境为例）
 
+### *. 虚拟环境软件准备与什么是虚拟环境
+
+虚拟环境是用来为了避免与主环境相冲突而在电脑中隔离出一块全新环境来进行代码作业。需要下载anaconda软件。
+
 ### 1. 使用Conda生成新隔离环境
 
 ```bash
 conda create --name stock_quant_env python=3.10.16
 ```
+
+*验证是否创建了虚拟环境：打开anaconda文件夹，找到envs文件夹，看其中是否有你所创建的虚拟环境名的文件夹。
+e.g, "C:\Users\24746\anaconda3\envs\stock_quant_env"
 
 ### 2. 激活虚拟环境
 
