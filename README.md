@@ -153,3 +153,4 @@ https://github.com/UFund-Me/Qbot
 https://github.com/yutiansut/QUANTAXIS
 https://github.com/hugo2046/QuantsPlaybook
 https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%E4%BA%A4%E6%98%93%E5%B9%B3%E5%8F%B0
+For deeper insights, I recommend "Advances in Financial Machine Learning" by Marcos López de Prado and exploring resources like the QuantInsti Blog and research papers on SSRN, which cover the latest developments in quantitative finance.
