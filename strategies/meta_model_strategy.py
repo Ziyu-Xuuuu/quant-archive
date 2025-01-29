@@ -15,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # 配置日志管理
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-fe
+
 # Transformer 模型
 class SimpleTransformer(nn.Module):
     def __init__(self, d_model=32, nhead=4, num_layers=2, dim_feedforward=64):
