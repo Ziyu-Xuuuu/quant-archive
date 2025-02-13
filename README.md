@@ -54,6 +54,7 @@ cd Stock_Quant
 
 虚拟环境是用来为了避免与主环境相冲突而在电脑中隔离出一块全新环境来进行代码作业。需要下载anaconda软件并完成环境配置，详细请参考：https://blog.csdn.net/Q_fairy/article/details/129158178
 
+
 完成后，以下步骤请打开cmd（命令行窗口）运行
 
 ### 1. 进入项目目录
