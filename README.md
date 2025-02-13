@@ -32,58 +32,11 @@ STOCK_QUANT/
 └── requirement.txt     # 环境配置参数
 ```
 
-## Ⅲ. 环境配置（以stock_quant_env这个虚拟环境为例）
-
-### *. 虚拟环境软件准备与什么是虚拟环境
-
-虚拟环境是用来为了避免与主环境相冲突而在电脑中隔离出一块全新环境来进行代码作业。需要下载anaconda软件。
-
-以下步骤请打开cmd（命令行窗口）运行
-
-### 1. 使用Conda生成新隔离环境
-
-```bash
-conda create --name stock_quant_env python=3.10.16
-```
-
-*验证是否创建了虚拟环境：打开anaconda文件夹，找到envs文件夹，看其中是否有你所创建的虚拟环境名的文件夹。
-e.g, "C:\Users\24746\anaconda3\envs\stock_quant_env"
-
-### 2. 激活虚拟环境
-
-```bash
-conda activate stock_quant_env
-```
-
-### 3. 安装依赖
-
-分别使用以下命令安装项目所需的Python依赖和C依赖，具体见requirements. txt：
-
-```bash
-pip install       # python相关依赖
-conda install     # C相关依赖
-```
-
-### 4. 环境配置及维护方法的更新
-
-现已将requirement.txt更新整理为Stock_Quant_environment.yml。可直接通过以下代码创建符合依赖要求的conda environment
-
-```
-conda env create -f Stock_Quant_environment.yml
-```
-
-或通过以下代码更新环境以达到修改过后的依赖要求
-
-```
-conda env update -f Stock_Quant_environment.yml --name Stock_Quant_environment
-```
-
-建议此后环境依赖的更新都在此.yml文件中进行
-（注：此方法仍存在bug，在调试成功后会另行说明）
-
-## Ⅳ.快速开始
+## Ⅲ.快速开始
 
 ### 1. 克隆项目
+为完成此步骤，需先完成Git安装与环境配置，详细步骤参考：https://blog.csdn.net/mukes/article/details/115693833
+完成Git安装后，打开cmd，切换至选定的文件夹位置并运行以下命令：
 
 ```bash
 git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
@@ -94,6 +47,47 @@ git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
 ```bash
 cd Stock_Quant
 ```
+
+## Ⅳ. 环境配置
+
+### *. 虚拟环境软件准备与什么是虚拟环境
+
+虚拟环境是用来为了避免与主环境相冲突而在电脑中隔离出一块全新环境来进行代码作业。需要下载anaconda软件并完成环境配置，详细请参考：https://blog.csdn.net/Q_fairy/article/details/129158178
+
+完成后，以下步骤请打开cmd（命令行窗口）运行
+
+### 1. 进入项目目录
+
+```bash
+cd /your_local_address/Stock_Quant
+```
+
+### 2. 创建含有所需依赖的虚拟环境
+
+```bash
+conda env create -f Stock_Quant_environment.yml
+```
+
+### 3. 打开/关闭虚拟环境
+
+分别使用以下命令打开/关闭虚拟环境：
+
+```bash
+conda activate Stock_Quant_environment
+```
+```bash
+conda deactivate Stock_Quant_environment
+```
+
+### 4. 环境维护与更新
+
+环境依赖的更新在Stock_Quant_environment.yml文件中进行
+并通过以下代码更新环境以达到修改过后的依赖要求
+
+```
+conda env update -f Stock_Quant_environment.yml --name Stock_Quant_environment
+```
+
 
 ## Ⅴ. 模型介绍
 
