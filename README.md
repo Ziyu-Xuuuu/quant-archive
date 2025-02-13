@@ -36,6 +36,7 @@ STOCK_QUANT/
 
 ### 1. 克隆项目
 为完成此步骤，需先完成Git安装与环境配置，详细步骤参考：https://blog.csdn.net/mukes/article/details/115693833
+
 完成Git安装后，打开cmd，切换至选定的文件夹位置并运行以下命令：
 
 ```bash
@@ -53,7 +54,6 @@ cd Stock_Quant
 ### *. 虚拟环境软件准备与什么是虚拟环境
 
 虚拟环境是用来为了避免与主环境相冲突而在电脑中隔离出一块全新环境来进行代码作业。需要下载anaconda软件并完成环境配置，详细请参考：https://blog.csdn.net/Q_fairy/article/details/129158178
-
 
 完成后，以下步骤请打开cmd（命令行窗口）运行
 
