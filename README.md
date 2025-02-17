@@ -142,7 +142,10 @@ git config --global user.name "你的用户名"
 git config --global user.email "你的邮箱"
 来进行全局git配置
 ```
-
+### 3.VScode找不到git
+```
+参考这篇文章https://blog.csdn.net/weixin_38779534/article/details/113112529
+```
 ## *Appendix
 
 https://github.com/wondertrader/wondertrader
