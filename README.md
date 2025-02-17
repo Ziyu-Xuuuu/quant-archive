@@ -34,20 +34,8 @@ STOCK_QUANT/
 
 ## Ⅲ.快速开始
 
-### 1. 克隆项目
-为完成此步骤，需先完成Git安装与环境配置，详细步骤参考：https://blog.csdn.net/mukes/article/details/115693833
-
-完成Git安装后，打开cmd，切换至选定的文件夹位置并运行以下命令：
-
-```bash
-git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
-```
-
-### 2. 进入项目目录
-
-```bash
-cd Stock_Quant
-```
+### 安装Git
+详细步骤参考：https://blog.csdn.net/mukes/article/details/115693833
 
 ## Ⅳ. 环境配置
 
@@ -76,11 +64,22 @@ conda env create -f Stock_Quant_environment.yml
 ```bash
 conda activate Stock_Quant_environment
 ```
+
 ```bash
 conda deactivate Stock_Quant_environment
 ```
 
-### 4. 环境维护与更新
+### 4. 进入项目目录
+
+```bash
+git clone https://github.com/Ziyu-Xuuuu/Stock_Quant.git
+```
+
+```bash
+cd Stock_Quant
+```
+
+### 5. 环境维护与更新
 
 环境依赖的更新在Stock_Quant_environment.yml文件中进行
 并通过以下代码更新环境以达到修改过后的依赖要求
@@ -148,4 +147,4 @@ https://github.com/UFund-Me/Qbot
 https://github.com/yutiansut/QUANTAXIS
 https://github.com/hugo2046/QuantsPlaybook
 https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%E4%BA%A4%E6%98%93%E5%B9%B3%E5%8F%B0
-For deeper insights, I recommend "Advances in Financial Machine Learning" by Marcos López de Prado and exploring resources like the QuantInsti Blog and research papers on SSRN, which cover the latest developments in quantitative finance.
+要获得更深入的见解，推荐Marcos López de Prado的“金融机器学习的进展”，并探索QuantInsti博客和SSRN研究论文等资源，这些资源涵盖了量化金融的最新发展。
