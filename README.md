@@ -90,7 +90,11 @@ cd Stock_Quant
 ```
 conda env update -f Stock_Quant_environment.yml --name Stock_Quant_environment
 ```
+### 6. VScode上使用git修改代码并上传
 
+在VScode上对代码进行编辑并保存后可以使用源码管理功能进行提交，若源码管理显示找不到git可以看下面的问题解决3.
+
+同时也可以使用该功能远程拉取等等。
 
 ## Ⅴ. 模型介绍
 
