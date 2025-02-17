@@ -54,6 +54,8 @@ cd /your_local_address/Stock_Quant
 
 ### 2. 创建含有所需依赖的虚拟环境
 
+运行命令行前，将Stock_Quant_environment.yml先下载下来放在命令行运行的文件夹里
+
 ```bash
 conda env create -f Stock_Quant_environment.yml
 ```
