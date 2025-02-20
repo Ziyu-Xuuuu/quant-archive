@@ -1,0 +1,136 @@
+\documentclass{article}
+\usepackage{ctex}  % 加载 ctex 宏包，自动处理中文
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\begin{document}
+
+\title{HMM 模型详细运行流程}
+\author{}
+\date{}
+\maketitle
+
+\section{概述}
+
+隐马尔可夫模型（Hidden Markov Model, HMM）是一种用于建模时间序列数据的概率模型，主要由\textbf{状态转移矩阵}（$A$）、\textbf{观测概率矩阵}（$B$）、\textbf{初始状态概率}（$\pi$）构成。它主要用于\textbf{识别隐藏状态}，并对未来趋势进行预测。
+
+本文件详细描述 HMM 的完整运行流程，特别强调之前讨论过的关键问题，包括 $B$ 的计算原理、前向后向概率的计算、HMM 训练的核心过程等。
+
+\section{HMM 运行的三大阶段}
+
+\begin{enumerate}
+    \item 初始化（Initialization）
+    \item 训练（Training, 使用 Baum-Welch 算法）
+    \item 解码 \& 预测（Decoding \& Prediction）
+\end{enumerate}
+
+\section{初始化（Initialization）}
+
+\subsection{隐藏状态的设定}
+
+假设市场有两个隐藏状态：
+\begin{itemize}
+    \item $S_0$（上涨市场）
+    \item $S_1$（下跌市场）
+\end{itemize}
+
+这些状态是不可观测的，我们只能通过股票数据（open, high, low, close, volume）来推测。
+
+\subsection{观测数据（$O$）}
+
+观测数据是一个 $n$ 维向量序列，即：
+\[
+O = \{ O_1, O_2, ..., O_T \}, \quad O_t \in \mathbb{R}^n
+\]
+
+例如，每天的市场数据可能是 5 维：
+\[
+O_t = [\text{open}, \text{high}, \text{low}, \text{close}, \text{volume}]
+\]
+
+\subsection{计算观测概率矩阵 $B$}
+
+我们先随机分配一部分数据到 $S_0$（上涨），其余分配到 $S_1$（下跌），然后计算：
+
+\begin{align}
+    \mu_j &= \frac{1}{N_j} \sum_{t \in S_j} O_t \\
+    \Sigma_j &= \frac{1}{N_j} \sum_{t \in S_j} (O_t - \mu_j)(O_t - \mu_j)^T
+\end{align}
+
+这些构成了\textbf{高斯分布的参数}，即：
+
+\[
+P(O_t | S_t = j) = \frac{1}{(2\pi)^{n/2} |\Sigma_j|^{1/2}} \exp \left( -\frac{1}{2} (O_t - \mu_j)^T \Sigma_j^{-1} (O_t - \mu_j) \right)
+\]
+
+最终，$B$ 由所有 $P(O_t | S_t = j)$ 组成，形成观测概率矩阵：
+
+\[
+B =
+\begin{bmatrix}
+P(O_1 | S_1) & P(O_2 | S_1) & \dots & P(O_T | S_1) \\
+P(O_1 | S_2) & P(O_2 | S_2) & \dots & P(O_T | S_2)
+\end{bmatrix}
+\]
+
+其中，$B_{ij}$ 代表在状态 $S_j$ 下，第 $i$ 个观测值的概率密度。
+
+\subsection{假设状态转移矩阵 $A$}
+
+状态转移矩阵描述市场状态的变化概率：
+
+\[
+A =
+\begin{bmatrix}
+P(S_0 \to S_0) & P(S_0 \to S_1) \\
+P(S_1 \to S_0) & P(S_1 \to S_1)
+\end{bmatrix}
+\]
+
+\subsection{假设初始状态分布 $\pi$}
+
+\[
+\pi = [P(S_0), P(S_1)]
+\]
+
+\section{训练（Baum-Welch 算法）}
+
+\subsection{计算前向概率 $\alpha$（前向算法）}
+
+\[
+\alpha_t(j) = P(O_1, O_2, ..., O_t, S_t = j)
+\]
+
+\begin{align}
+    \text{初始条件} (t=1): & \quad \alpha_1(j) = \pi_j \cdot B_j(O_1) \\
+    \text{递归计算} (t \geq 2): & \quad \alpha_t(j) = \sum_{i} \alpha_{t-1}(i) \cdot A_{ij} \cdot B_j(O_t)
+\end{align}
+
+\subsection{计算后向概率 $\beta$（后向算法）}
+
+\[
+\beta_t(j) = P(O_{t+1}, O_{t+2}, ..., O_T | S_t = j)
+\]
+
+\begin{align}
+    \text{终止条件} (t=T): & \quad \beta_T(j) = 1 \\
+    \text{递归计算} (t=T-1, ..., 1): & \quad \beta_t(j) = \sum_{i} A_{ji} \cdot B_i(O_{t+1}) \cdot \beta_{t+1}(i)
+\end{align}
+
+\subsection{计算后验概率 $\gamma$（软分配）}
+
+\[
+\gamma_t(j) = \frac{\alpha_t(j) \beta_t(j)}{\sum_k \alpha_t(k) \beta_t(k)}
+\]
+
+这表示在时间 $t$，市场属于状态 $S_j$ 的概率。
+
+\section{结论}
+
+\begin{itemize}
+    \item $B$（观测概率矩阵）通过高斯分布计算，包含均值 \& 协方差，并形成完整的矩阵。
+    \item $A$（状态转移矩阵）控制状态如何变化。
+    \item 前向 \& 后向算法用于计算状态概率，训练 HMM 使其拟合数据。
+    \item 最终，HMM 识别市场状态，并预测趋势。
+\end{itemize}
+
+\end{document}
