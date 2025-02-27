@@ -19,7 +19,7 @@ def main():
     # ========== 1. 获取或加载历史数据 ==========
     fetcher = DataFetcher()
     filename = "601788_SH.csv"
-    file_path = "C:\\Users\\user\\Documents\\GitHub\\trader\\Stock_Trade\\data\\601788_SH.csv"
+    file_path = r"C:\Users\24746\anaconda3\envs\stock_quant_env\Stock_Quant\data\601788_SH.csv"
 
     if not os.path.exists(file_path):
         print(f"未检测到 {filename}，开始下载历史数据...")
