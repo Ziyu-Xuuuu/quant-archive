@@ -1,0 +1,13 @@
+research_task:
+  description: >
+   使用新浪微博上的评论数据集对股民对于特斯拉的行情的态度进行深入研究。
+  expected_output: >
+    列出你认为重要的评论
+  agent: researcher
+
+reporting_task:
+  description: >
+    阅读你收到的评论，并就此给出一份市场态度报告
+  expected_output: >
+    一个完整的 Markdown 格式 报告，包含主要主题，每个主题都有完整的详细信息。（不带 '```' 代码标记）
+  agent: reporting_analyst
