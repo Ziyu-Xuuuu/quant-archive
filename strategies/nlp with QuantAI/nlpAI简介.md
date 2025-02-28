@@ -36,7 +36,7 @@ reporting_analyst:
 
 ### 2.task （可以直接通过询问gpt生成）
 
-注意：不要在task中提及你需要AI解析的文件！文件读取是通过修改[crew.py]()实现！
+注意：不要在task中提及你需要AI解析的文件！文件读取是通过修改[crew.py](https://github.com/Ziyu-Xuuuu/Stock_Quant/blob/main/strategies/nlp%20with%20QuantAI/src/crew.py)实现！
 ‘修改 `QuantAI/src/QuantAI/crew.py`来添加需要的逻辑、工具和特定的参数’（见[使用教程.md](https://github.com/Ziyu-Xuuuu/Stock_Quant/blob/main/QuantAI/%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B.md)）
 
 ```bash
@@ -117,4 +117,4 @@ reporting_task:
     )
 ```
 
-这里只是一个基础的实现了读取评论，从中选出若干条进行分析的智能体而已，具体的完善仍然需要对[crew.py]()进一步修改。
+这里只是一个基础的实现了读取评论，从中选出若干条进行分析的智能体而已，具体的完善仍然需要对[crew.py](https://github.com/Ziyu-Xuuuu/Stock_Quant/blob/main/strategies/nlp%20with%20QuantAI/src/crew.py)进一步修改。
