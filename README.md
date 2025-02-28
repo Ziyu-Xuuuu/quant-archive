@@ -165,3 +165,4 @@ https://github.com/yutiansut/QUANTAXIS
 https://github.com/hugo2046/QuantsPlaybook
 https://github.com/thuquant/awesome-quant?tab=readme-ov-file#%E9%87%8F%E5%8C%96%E4%BA%A4%E6%98%93%E5%B9%B3%E5%8F%B0
 要获得更深入的见解，推荐Marcos López de Prado的“金融机器学习的进展”，并探索QuantInsti博客和SSRN研究论文等资源，这些资源涵盖了量化金融的最新发展。
+
