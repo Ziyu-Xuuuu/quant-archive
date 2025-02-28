@@ -20,6 +20,10 @@ STOCK_QUANT/
 │   └── 股票代码.csv
 ├── live/               # 交易模块，根据预测决定买卖行为
 │   └── trade.py
+├── Python_Crawler      # 爬虫程序，用于爬取网络数据
+│   ├── Micro_blog      # 爬取微博评论
+│   └── Snow_Ball       # 爬取雪球评论
+├── QuantAI             # 用于量化分析的智能体
 ├── Stock/              # 暂无
 ├── strategies/         # 预测模块，包含多种常用模型
 │   └── xxmodel_strategy.py
