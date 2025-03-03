@@ -1,7 +1,7 @@
 [project]
-name = "justatry"
+name = "nlp_with_QuantAI"
 version = "0.1.0"
-description = "justatry using crewAI"
+description = "nlp_with_QuantAI using CrewAI"
 authors = [{ name = "Your Name", email = "you@example.com" }]
 requires-python = ">=3.10,<3.13"
 dependencies = [
@@ -9,11 +9,11 @@ dependencies = [
 ]
 
 [project.scripts]
-justatry = "justatry.main:run"
-run_crew = "justatry.main:run"
-train = "justatry.main:train"
-replay = "justatry.main:replay"
-test = "justatry.main:test"
+nlp_with_QuantAI = "nlp_with_QuantAI.main:run"
+run_crew = "nlp_with_QuantAI.main:run"
+train = "nlp_with_QuantAI.main:train"
+replay = "nlp_with_QuantAI.main:replay"
+test = "nlp_with_QuantAI.main:test"
 
 [build-system]
 requires = ["hatchling"]

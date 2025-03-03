@@ -1576,17 +1576,6 @@ wheels = [
 ]
 
 [[package]]
-name = "justatry"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "crewai", extra = ["tools"] },
-]
-
-[package.metadata]
-requires-dist = [{ name = "crewai", extras = ["tools"], specifier = ">=0.102.0,<1.0.0" }]
-
-[[package]]
 name = "kubernetes"
 version = "32.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2049,6 +2038,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/fd/1d/06475e1cd5264c0b8
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/54/dd730b32ea14ea797530a4479b2ed46a6fb250f682a9cfb997e968bf0261/networkx-3.4.2-py3-none-any.whl", hash = "sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f", size = 1723263 },
 ]
+
+[[package]]
+name = "nlp-with-quantai"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "crewai", extra = ["tools"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "crewai", extras = ["tools"], specifier = ">=0.102.0,<1.0.0" }]
 
 [[package]]
 name = "nodeenv"
