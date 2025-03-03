@@ -4,7 +4,7 @@ import warnings
 
 from datetime import datetime
 
-from justatry.crew import Justatry
+from nlp_with_QuantAI.crew import nlp_with_QuantAI
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
