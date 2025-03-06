@@ -3,8 +3,8 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
 @CrewBase
-class Justatry():
-    """Justatry crew"""
+class nlp_with_QuantAI():
+    """nlp_with_QuantAIcrew"""
 
     agents_config = 'config/agents.yaml'
     tasks_config = 'config/tasks.yaml'
@@ -26,7 +26,7 @@ class Justatry():
     @task
     def research_task(self) -> Task:
         def process_excel():
-            file_path = r"C:\Users\24746\justatry\微博评论.xlsx"
+            file_path = r"C:\Users\24746\anaconda3\envs\stock_quant_env\Stock_Quant\strategies\nlp_with_QuantAI\微博评论.xlsx"
             try:
                 df = pd.read_excel(file_path)  # 读取 Excel 文件
                 if "评论内容" in df.columns:
