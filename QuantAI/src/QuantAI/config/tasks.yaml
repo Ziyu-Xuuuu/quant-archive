@@ -1,13 +1,17 @@
 research_task:
   description: >
-   使用新浪微博上的评论数据集对股民对于特斯拉的行情的态度进行深入研究。
+    Conduct a thorough research about {topic}
+    Make sure you find any interesting and relevant information given
+    the current year is {current_year}.
   expected_output: >
-    列出你认为重要的评论
+    A list with 10 bullet points of the most relevant information about {topic}
   agent: researcher
 
 reporting_task:
   description: >
-    阅读你收到的评论，并就此给出一份市场态度报告
+    Review the context you got and expand each topic into a full section for a report.
+    Make sure the report is detailed and contains any and all relevant information.
   expected_output: >
-    一个完整的 Markdown 格式 报告，包含主要主题，每个主题都有完整的详细信息。（不带 '```' 代码标记）
+    A fully fledged report with the main topics, each with a full section of information.
+    Formatted as markdown without '```'
   agent: reporting_analyst

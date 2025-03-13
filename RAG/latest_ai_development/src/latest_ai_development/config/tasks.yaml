@@ -1,0 +1,13 @@
+research_task:
+  description: >
+    阅读python代码:
+  expected_output: >
+    一个关于一段代码的中文版readme文件
+  agent: researcher
+
+reporting_task:
+  description: >
+    美化修缮给出的ReadME文件
+  expected_output: >
+    一个修缮好的ReadME文件
+  agent: reporting_analyst
