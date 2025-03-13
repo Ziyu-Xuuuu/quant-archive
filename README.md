@@ -10,30 +10,31 @@
 
 ## Ⅱ. 文件结构
 
-``` plaintext
+```plaintext
 STOCK_QUANT/
-├── backtest/           # 回测模块，用于回测模型效果
+├── backtest/                               # 回测模块，用于回测模型效果
 │   └── backtester.py
-├── config/             # 证券接入模块，用于与真实市场接入
+├── config/                                 # 证券接入模块，用于与真实市场接入
 │   └── config.py
-├── data/               # 存放股票历史数据，作为数据集使用
+├── data/                                   # 存放股票历史数据，作为数据集使用
 │   └── 股票代码.csv
-├── live/               # 交易模块，根据预测决定买卖行为
+├── live/                                   # 交易模块，根据预测决定买卖行为
 │   └── trade.py
-├── Python_Crawler      # 爬虫程序，用于爬取网络数据
-│   ├── Micro_blog      # 爬取微博评论
-│   └── Snow_Ball       # 爬取雪球评论
-├── QuantAI             # 用于量化分析的智能体
-├── Stock/              # 暂无
-├── strategies/         # 预测模块，包含多种常用模型
+├── Python_Crawler                          # 爬虫程序，用于爬取网络数据
+│   ├── Micro_blog                          # 爬取微博评论
+│   └── Snow_Ball                           # 爬取雪球评论
+├── QuantAI                                 # 用于量化分析的智能体
+├── Stock/                                  # 暂无
+├── strategies/                             # 预测模块，包含多种常用模型
 │   └── xxmodel_strategy.py
-├── utils/              # 预训练文件夹（模型保存、预训练等）
-│   ├── models          # 模型参数
-│   └── train           # 模型预训练
-├── work log            # 工作日志
-├── main.py             # 项目主入口
-├── README.md           # 项目说明文件
-└── requirement.txt     # 环境配置参数
+├── utils/                                  # 预训练文件夹（模型保存、预训练等）
+│   ├── models                              # 模型参数
+│   └── train                               # 模型预训练
+├── work log                                # 工作日志
+├── main.py                                 # 项目主入口
+├── README.md                               # 项目说明文件
+├── Stock_Quant_environment.yml             # 环境配置参数(for Windows)
+└── Stock_Quant_environment_for_mac.yml     # 环境配置参数(for Mac)
 ```
 
 ## Ⅲ.快速开始
@@ -185,11 +186,11 @@ git config --global user.email "你的邮箱"
 
 - **面向专业机构的整体架构**
 - **支持数十亿级的实盘管理规模**
-- **涵盖量化交易的全流程**：  
-  - 数据清洗  
-  - 回测分析  
-  - 实盘交易  
-  - 运营调度  
+- **涵盖量化交易的全流程**：
+  - 数据清洗
+  - 回测分析
+  - 实盘交易
+  - 运营调度
 
 **WonderTrader** 提供了从**研究、交易到运营管理**的完整一站式量化开发环境，适用于专业机构和高频交易策略开发。
 
