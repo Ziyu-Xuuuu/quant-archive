@@ -10,14 +10,14 @@ from selenium.webdriver.support import expected_conditions as EC
 import datetime
 
 # **定义要搜索的企业名称**
-company_name = "光大证券"  # 修改为你要搜索的公司
+company_name = "贵州茅台"  # 修改为你要搜索的公司
 
 # **ChromeDriver 路径**
 chromedriver_path = r"D:\Chrome\chrome_driver\chromedriver-win64\chromedriver-win64\chromedriver.exe"
 
 # **Chrome 浏览器选项**
 chrome_options = Options()
-chrome_options.add_argument("--headless")  # 无头模式
+#chrome_options.add_argument("--headless")  # 无头模式
 chrome_options.add_argument("--disable-gpu")  
 chrome_options.add_argument("--ignore-certificate-errors")
 chrome_options.add_argument("--allow-running-insecure-content")
