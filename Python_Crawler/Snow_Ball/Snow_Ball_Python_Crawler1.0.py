@@ -17,7 +17,7 @@ chromedriver_path = r"D:\Chrome\chrome_driver\chromedriver-win64\chromedriver-wi
 
 # **Chrome 浏览器选项**
 chrome_options = Options()
-#chrome_options.add_argument("--headless")  # 无头模式
+chrome_options.add_argument("--headless")  # 无头模式
 chrome_options.add_argument("--disable-gpu")  
 chrome_options.add_argument("--ignore-certificate-errors")
 chrome_options.add_argument("--allow-running-insecure-content")
