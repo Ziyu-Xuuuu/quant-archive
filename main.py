@@ -19,7 +19,7 @@ def main():
     # ========== 1. 获取或加载历史数据 ==========
     fetcher = DataFetcher()
     filename = "601788_SH.csv"
-    file_path = r"C:\Users\24746\anaconda3\envs\stock_quant_env\Stock_Quant\data\601788_SH.csv"
+    file_path = r"C:\Users\user\Documents\GitHub\trader\Stock_Trade\data\601788_SH.csv"
 
     if not os.path.exists(file_path):
         print(f"未检测到 {filename}，开始下载历史数据...")
@@ -30,26 +30,42 @@ def main():
         df = fetcher.read_data_from_csv(file_path)
 
     # ========== 2. 多策略回测比较 ==========
+    # 2. 多策略回测比较
     print("开始回测 ...")
-    strategies = {
-        # 交易策略（会实际产生资金曲线）
-        "MA": MovingAverageStrategy(short_window=5, long_window=20),
-        "MACD": MACDStrategy(),
-        "RSI": RSIStrategy(period=14, rsi_upper=70, rsi_lower=30),
-        "Bollinger": BollingerStrategy(period=20, num_std=2),
 
-        # 预测模型（只输出预测值，不实际开平仓）
-        "MetaModel": MetaModelStrategy(
-            lstm_path='utils/models/lstm_model.h5',
-            hmm_path='utils/models/hmm_model.pkl',
-            transformer_path='utils/models/transformer_model_state_dict.pt',
-            lookback=60
-        ),
-        "NLP": NLPSentimentStrategy()
-    }
+    # 在这里定义你想要对比的多种 selection_mode
+    selection_modes = [
+        'three_models',
+        'lstm_hmm',
+        'lstm_transformer',
+        'hmm_transformer'
+    ]
 
-    backtester = Backtester(strategies=strategies, data=df, initial_capital=100000.0)
-    backtester.run_backtest()
+    for mode in selection_modes:
+        print(f"=== 当前 selection_mode: {mode} ===")
+
+        # 每个模式都单独构建一次策略字典
+        strategies = {
+            # 交易策略（会实际产生资金曲线）
+            "MA": MovingAverageStrategy(short_window=5, long_window=20),
+            "MACD": MACDStrategy(),
+            "RSI": RSIStrategy(period=14, rsi_upper=70, rsi_lower=30),
+            "Bollinger": BollingerStrategy(period=20, num_std=2),
+
+            # 将 MetaModel 的 selection_mode 改为当前循环的 mode
+            "MetaModel": MetaModelStrategy(
+                lstm_path='utils/models/lstm_model.h5',
+                hmm_path='utils/models/hmm_model.pkl',
+                transformer_path='utils/models/transformer_model_state_dict.pt',
+                lookback=60,
+                selection_mode=mode  # <-- 关键：传入不同的组合模式
+            ),
+            "NLP": NLPSentimentStrategy()
+        }
+
+        # 每次都生成一个新的 Backtester 进行回测
+        backtester = Backtester(strategies=strategies, data=df, initial_capital=100000.0)
+        backtester.run_backtest()
 
     # ========== 3. 实盘(模拟)交易 ==========
     print("开始模拟实盘交易(示例) ...")

@@ -178,7 +178,8 @@ class MetaModelStrategy(BaseStrategy):
         error_threshold=0.05,
         submodel_threshold=0.02,
         lookback=60,  # 确保这个参数存在
-        scaler_path=None
+        scaler_path=None,
+        selection_mode='three_models'
     ):
         self.lookback = lookback  # 这里确保 lookback 被正确存储
         self.lstm_model = LSTMModel(model_path=lstm_path, lookback=lookback, scaler_path=scaler_path)
@@ -186,21 +187,51 @@ class MetaModelStrategy(BaseStrategy):
         self.transformer_model = TransformerModel(model_path=transformer_path, lookback=lookback, scaler_path=scaler_path)
         self.error_threshold = error_threshold
         self.submodel_threshold = submodel_threshold
-
+        self.selection_mode = selection_mode
 
     def _select_submodel(self, df_window: pd.DataFrame) -> str:
-        recent = df_window.tail(5)
-        if len(recent) < 5:
+        # 若数据不足则默认返回某个模型
+        if len(df_window) < self.lookback:
             return "LSTM"
-        returns = recent['close'].pct_change().dropna()
+
+        # ========== 示例：因子计算（可根据实际需求修改） ==========
+        # 1) 全部窗口的收益率波动率
+        returns = df_window['close'].pct_change().dropna()
         volatility = returns.std()
-        avg_return = returns.mean()
-        if volatility > 0.02:
-            return "Transformer"
-        elif abs(avg_return) < 0.001:
-            return "LSTM"
+
+        # 2) 5日简单移动平均 vs 最后一根K线的收盘价
+        ma_5 = df_window['close'].rolling(window=5).mean().iloc[-1]
+        last_close = df_window['close'].iloc[-1]
+
+        # ========== 根据因子进行策略选择，结合 selection_mode 区分可选模型 ==========
+        # 示例：如果波动较大且当前价 < 5日均价倾向 Transformer，否则根据情况在剩余模型中作选择
+        if (volatility > 0.02) and (last_close < ma_5):
+            if self.selection_mode == 'lstm_hmm':
+                return "HMM"
+            elif self.selection_mode == 'lstm_transformer':
+                return "Transformer"
+            elif self.selection_mode == 'hmm_transformer':
+                return "Transformer"
+            else:  # 'three_models'
+                return "Transformer"
+        elif (volatility < 0.01) and (last_close > ma_5):
+            if self.selection_mode == 'lstm_hmm':
+                return "LSTM"
+            elif self.selection_mode == 'lstm_transformer':
+                return "LSTM"
+            elif self.selection_mode == 'hmm_transformer':
+                return "HMM"
+            else:  # 'three_models'
+                return "LSTM"
         else:
-            return "HMM"
+            if self.selection_mode == 'lstm_transformer':
+                return "Transformer"
+            elif self.selection_mode == 'hmm_transformer':
+                return "HMM"
+            elif self.selection_mode == 'lstm_hmm':
+                return "HMM"
+            else:  # 'three_models'
+                return "HMM"
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         MetaModelStrategy.call_count += 1
