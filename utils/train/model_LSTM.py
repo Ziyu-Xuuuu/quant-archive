@@ -1,101 +1,160 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+基于 LSTM 预测单支股票“下一日收盘价”
+—————————————————————————————————————
+• 读取 CSV（示例：601788.SH）
+• 构造 look-back=120 天样本 (X, y)
+• 训练两层 LSTM → Dense(1) 模型
+• 评估、保存模型与 scaler
+• 可视化：Loss 曲线 / 真实 vs 预测 / 残差分布
+"""
 import os
 import numpy as np
 import pandas as pd
+import joblib
+import matplotlib.pyplot as plt
 
-from tensorflow.keras.models import Sequential, save_model
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.models import Sequential, save_model, load_model
+from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_absolute_error
 
-def load_ebs_data(csv_path):
-    """
-    加载光大证券历史数据, 返回 DataFrame (含 open, high, low, close, vol).
-    """
-    df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
-    df = df[['open', 'high', 'low', 'close', 'vol']].dropna()
-    df.sort_index(inplace=True)
+# ------------------------------------------------------------
+# 1. 数据加载
+# ------------------------------------------------------------
+def load_price_data(csv_path: str) -> pd.DataFrame:
+    df = (
+        pd.read_csv(csv_path, index_col=0, parse_dates=True)
+          .loc[:, ['open', 'high', 'low', 'close', 'vol']]
+          .dropna()
+          .sort_index()
+    )
     return df
 
+# ------------------------------------------------------------
+# 2. 数据集构造
+# ------------------------------------------------------------
+def make_dataset(df: pd.DataFrame, lookback: int = 60):
+    feature_cols = ['open', 'high', 'low', 'close', 'vol']
+    feat_values  = df[feature_cols].values.astype('float32')
+
+    scaler_x = MinMaxScaler((0, 1))
+    feat_scaled = scaler_x.fit_transform(feat_values)
+
+    X, y = [], []
+    for i in range(len(df) - lookback - 5 + 1):  # 注意：要预留5行用于均值计算
+        X.append(feat_scaled[i: i + lookback])  # 不变
+        y.append(np.mean(feat_scaled[i + lookback: i + lookback + 5, 3]))  # 第3列的均值
+
+    return np.array(X), np.array(y), scaler_x
+
+# ------------------------------------------------------------
+# 3. 模型构建
+# ------------------------------------------------------------
 def build_lstm_model(input_shape):
-    """
-    构建一个用于回归预测下一日收盘价的 LSTM 模型:
-    input_shape = (lookback, feature_dim)
-    """
-    model = Sequential()
-    model.add(LSTM(32, input_shape=input_shape))
-    # 回归输出层，不要使用 sigmoid/softmax
-    model.add(Dense(1))
-    # 回归问题常用 'mse' 或 'mae'
-    model.compile(loss='mse', optimizer=Adam(0.001))
+    model = Sequential([
+        LSTM(50, return_sequences=True, input_shape=input_shape),
+        Dropout(0.2),
+        LSTM(100),
+        Dropout(0.2),
+        Dense(1)          # 线性输出
+    ])
+    model.compile(optimizer=Adam(1e-3), loss='mse')
     return model
 
-def create_dataset(df, lookback=60):
-    """
-    构造回归训练数据:
-    X: (样本数, lookback, feature_dim=5)
-    y: (样本数,)  -- 对应“下一日收盘价”
+# ---------- 反归一化 close 工具 ----------
+def inverse_close(scaled_close_vec, scaler_x):
+    """把缩放后的 close 列还原到真实价格"""
+    dummy = np.zeros((len(scaled_close_vec), 5))
+    dummy[:, 3] = scaled_close_vec       # 仅填充 close，其余列占位
+    return scaler_x.inverse_transform(dummy)[:, 3]
+# ----------------------------------------
 
-    示例：y[i] = df['close'][i+lookback]，表示第 i+lookback 这个位置的收盘价
-    """
-    data = df[['open','high','low','close','vol']].values
-    closes = df['close'].values
-
-    X_list, y_list = [], []
-    # 这里 -1 是为了能拿到 "下一日" 的价格
-    for i in range(len(data) - lookback - 1):
-        # 取最近 60 天作为一个样本
-        X_list.append(data[i : i + lookback])
-        # 取下一日的收盘价作为标签
-        y_list.append(closes[i + lookback])
-
-    X_arr = np.array(X_list)
-    y_arr = np.array(y_list)
-    return X_arr, y_arr
-
+# ------------------------------------------------------------
+# 4. 主流程
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    # 1) 加载数据
-    csv_path = "C:\\Users\\user\\Documents\\GitHub\\trader\\Stock_Trade\\data\\601788_SH.csv"
-    df_ebs = load_ebs_data(csv_path)
+    # —— 配置路径
+    csv_path  = r"C:\Users\user\Documents\GitHub\trader\Stock_Trade\data\601788_SH.csv"
+    model_dir = r"C:\Users\user\Documents\GitHub\trader\Stock_Trade\utils\models"
+    os.makedirs(model_dir, exist_ok=True)
 
-    # 2) 生成回归数据集
+    # —— 加载数据
+    df = load_price_data(csv_path)
     lookback = 60
-    X, y = create_dataset(df_ebs, lookback=lookback)
+    X, y, scaler_x = make_dataset(df, lookback)
 
-    # （可选）对 X、y 做归一化/标准化，这里仅做简单示例
-    # from sklearn.preprocessing import MinMaxScaler
-    # scaler_X = MinMaxScaler()
-    # scaler_y = MinMaxScaler()
-    # X_reshaped = X.reshape(-1, X.shape[-1])    # (样本数 * lookback, feature_dim)
-    # X_scaled = scaler_X.fit_transform(X_reshaped)
-    # X = X_scaled.reshape(X.shape[0], lookback, X.shape[-1])
-    # y = scaler_y.fit_transform(y.reshape(-1,1))
+    # —— 时间顺序划分 80/20
+    split_idx = int(len(X) * 0.8)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
 
-    # 3) 划分训练/测试集 (80% 训练, 20% 测试)
-    train_size = int(len(X) * 0.8)
-    X_train, X_test = X[:train_size], X[train_size:]
-    y_train, y_test = y[:train_size], y[train_size:]
-
-    # 4) 构建回归模型
-    model = build_lstm_model(input_shape=(lookback, 5))
-
-    # 5) 训练模型
-    model.fit(
+    # —— 构建并训练模型
+    model = build_lstm_model(input_shape=(lookback, X.shape[-1]))
+    history = model.fit(
         X_train, y_train,
-        epochs=10,
-        batch_size=32,
         validation_split=0.2,
-        verbose=1
+        epochs=20,
+        batch_size=128,
+        verbose=2
     )
 
-    # 6) 评估
-    #    由于是回归任务，所以返回的 metrics 只有 loss（mse），可以自己写代码计算 MAE 等
-    test_loss = model.evaluate(X_test, y_test, verbose=0)
-    print(f"Test MSE={test_loss:.4f}")
+    # —— 评估
+    test_mse = model.evaluate(X_test, y_test, verbose=0)
+    print(f"\nTest MSE = {test_mse:.4f}")
+    y_pred_scaled = model.predict(X_test, verbose=0).flatten()
+    y_true = inverse_close(y_test,  scaler_x)
+    y_pred = inverse_close(y_pred_scaled, scaler_x)
+    print(f"Test MAE = {mean_absolute_error(y_true, y_pred):.4f}")
 
-    # 如果做了归一化，这里需要 inverse_transform 恢复预测值
-    # y_pred_scaled = model.predict(X_test)
-    # y_pred = scaler_y.inverse_transform(y_pred_scaled)
+    # —— 保存
+    model_path  = os.path.join(model_dir, "lstm_model.h5")
+    scaler_path = os.path.join(model_dir, "lstm_close_scaler.pkl")
+    save_model(model, model_path)
+    joblib.dump(scaler_x, scaler_path)
+    print(f"\n模型已保存至: {model_path}")
+    print(f"Scaler 已保存至: {scaler_path}")
 
-    # 7) 保存模型
-    os.makedirs("../models", exist_ok=True)
-    save_model(model, "../models/lstm_model.h5")
-    print("LSTM回归模型已保存到 ../models/lstm_model.h5")
+    # --------------------------------------------------------
+    # 5. 可视化
+    # --------------------------------------------------------
+    # 5-1 训练 & 验证损失
+    plt.figure(figsize=(8,4))
+    plt.plot(history.history["loss"], label="Train MSE")
+    plt.plot(history.history["val_loss"], label="Val MSE")
+    plt.title("Training vs Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("MSE")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # 5-2 真实价 vs 预测价（测试集）
+    test_dates = df.index[-len(y_true):]
+    plt.figure(figsize=(12,5))
+    plt.plot(test_dates, y_true, label="Actual Close")
+    plt.plot(test_dates, y_pred, label="Predicted Close")
+    plt.title("Actual vs Predicted Close (Test Set)")
+    plt.xlabel("Date")
+    plt.ylabel("Price")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # 5-3 残差分布
+    residuals = y_true - y_pred
+    plt.figure(figsize=(6,4))
+    plt.hist(residuals, bins=30)
+    plt.title("Prediction Residuals")
+    plt.xlabel("Actual − Predicted (Price)")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.show()
+
+    # （可选）方向准确率
+    direction_true = np.sign(np.diff(y_true))
+    direction_pred = np.sign(np.diff(y_pred))
+    acc = (direction_true == direction_pred).mean()
+    print(f"Direction Accuracy = {acc:.2%}")
