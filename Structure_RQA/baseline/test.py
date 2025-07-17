@@ -27,7 +27,7 @@ def handle_bar(context, bar_dict):
 
         # 计算 RSI
         rsi_series = talib.RSI(prices, timeperiod=context.TIME_PERIOD)
-        yesterday_rsi = rsi_series[-2]  # 使用“昨天”的 RSI 值，避免未来数据泄露
+        yesterday_rsi = rsi_series[-1]  # 使用“昨天”的 RSI 值，避免未来数据泄露
 
         # 当前持仓数量
         cur_position = get_position(stock).quantity
