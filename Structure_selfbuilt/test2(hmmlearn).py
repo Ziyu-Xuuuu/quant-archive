@@ -814,6 +814,68 @@ def classify_states(df: pd.DataFrame) -> pd.Series:
 
     return pd.Series(states, index=df.index)
 
+def compute_states_from_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    输入:
+        df: 至少包含 ['date','open','high','low','close'] 列（行情数据）
+    输出:
+        一个新的 df_feat，在原 df 基础上加上:
+            - trend_regime  (T1~T4/UNK)
+            - vol_regime    (V1~V4)
+            - state         (S1~S5)
+            - hmm_state, hmm_state_label（如果 HMM 拟合成功）
+    """
+    df = df.copy()
+
+    # 确保日期是 datetime，按日期排序
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date")
+
+    # 4. 计算特征
+    df_feat = compute_features(df)
+
+    # 5. 趋势结构
+    df_feat["trend_regime"] = classify_trend_regimes(df_feat)
+
+    # 6. 波动结构
+    vol_classifier = make_vol_classifier(df_feat)
+    df_feat["vol_regime"] = df_feat.apply(vol_classifier, axis=1)
+
+    # 7. 路径依赖状态 S1~S5
+    df_feat["state"] = classify_states(df_feat)
+
+    # 7.2 HMM（用 hmmlearn 自动学）
+    feature_cols = ["ret", "adx", "bb_width", "vol_20", "rsi", "macd_hist"]
+    df_hmm = df_feat.dropna(subset=feature_cols).copy()
+    X = df_hmm[feature_cols].values
+
+    try:
+        if len(df_hmm) < 10:
+            raise ValueError("用于 HMM 的样本太少（<10），请检查数据。")
+
+        n_states = 5
+        model_hmm = GaussianHMM(
+            n_components=n_states,
+            covariance_type="full",
+            n_iter=100,
+            random_state=42,
+        )
+
+        model_hmm.fit(X)
+        hmm_states = model_hmm.predict(X)
+
+        df_feat.loc[df_hmm.index, "hmm_state"] = hmm_states
+
+        # 映射到规则状态标签
+        mapping = map_hmm_state_to_rule_state(df_feat, hmm_col="hmm_state", rule_col="state")
+        df_feat["hmm_state_label"] = df_feat["hmm_state"].map(mapping)
+
+    except Exception as e:
+        print("[WARN] HMM 拟合或解码失败：", e)
+
+    return df_feat
+
 
 def estimate_transition_matrix(states: pd.Series,
                                state_order: list[str] | None = None) -> pd.DataFrame:
