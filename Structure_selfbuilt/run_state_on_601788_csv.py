@@ -6,10 +6,9 @@ INPUT_CSV = r"data\601788_SH.csv"
 OUTPUT_CSV = r"data\market_states_601788_SH.csv"
 
 def main():
-    # 1. 读已有的 CSV（你之前 save_data_to_csv 存出来的）
+    # 1. 读已有的 CSV
     df = pd.read_csv(INPUT_CSV, index_col=0, parse_dates=True)
 
-    # 此时索引一般叫 trade_date，列是：ts_code, open, high, low, close, vol
     # 2. 把索引变成一列，并改成 compute_states_from_df 需要的 'date'
     df_reset = df.reset_index()
     df_reset = df_reset.rename(columns={df_reset.columns[0]: "date"})  # trade_date -> date
@@ -17,11 +16,11 @@ def main():
     # 3. 调用状态机
     df_states = compute_states_from_df(df_reset)
 
-    # 4. 把 date 设回索引，索引名仍然叫 trade_date，兼容你原来的习惯
+    # 4. 把 date 设回索引
     df_states = df_states.set_index("date")
     df_states.index.name = "trade_date"
 
-    # 5. 保存一个新的 CSV，看看结果
+    # 5. 保存一个新的 CSV
     cols_out = [
         "ts_code", "open", "high", "low", "close", "vol",
         "trend_regime", "vol_regime", "state"
