@@ -845,7 +845,7 @@ def compute_states_from_df(df: pd.DataFrame) -> pd.DataFrame:
     # 7. 路径依赖状态 S1~S5
     df_feat["state"] = classify_states(df_feat)
 
-    # 7.2 HMM（用 hmmlearn 自动学）
+     # 7.2 HMM（用 hmmlearn 自动学）
     feature_cols = ["ret", "adx", "bb_width", "vol_20", "rsi", "macd_hist"]
     df_hmm = df_feat.dropna(subset=feature_cols).copy()
     X = df_hmm[feature_cols].values
@@ -862,12 +862,22 @@ def compute_states_from_df(df: pd.DataFrame) -> pd.DataFrame:
             random_state=42,
         )
 
+        # EM 训练
         model_hmm.fit(X)
+
+        # 1) 硬状态（保留，便于解释/调试）
         hmm_states = model_hmm.predict(X)
 
+        # 2) soft posterior（重点：给 encoder 用）
+        hmm_proba = model_hmm.predict_proba(X)  # shape: (N, n_states)
+
+        # 写回 df_feat（注意用 df_hmm.index 对齐）
         df_feat.loc[df_hmm.index, "hmm_state"] = hmm_states
 
-        # 映射到规则状态标签
+        for k in range(n_states):
+            df_feat.loc[df_hmm.index, f"hmm_p{k}"] = hmm_proba[:, k]
+
+        # 映射到规则状态标签（仍然可用硬状态做解释）
         mapping = map_hmm_state_to_rule_state(df_feat, hmm_col="hmm_state", rule_col="state")
         df_feat["hmm_state_label"] = df_feat["hmm_state"].map(mapping)
 
@@ -1006,10 +1016,16 @@ def main() -> None:
 
         # EM 训练 + 预测隐状态
         model_hmm.fit(X)
+        # 1) 硬状态（保留，用于debug/可视化）
         hmm_states = model_hmm.predict(X)
+
+        # 2) soft posterior概率（拿去做encoder输入）
+        hmm_proba = model_hmm.predict_proba(X)  # shape:(N,K)
 
         # 写回 df_feat
         df_feat.loc[df_hmm.index, "hmm_state"] = hmm_states
+        for k in range(n_states):
+            df_feat.loc[df_hmm.index, f"hmm_p{k}"] = hmm_proba[:, k]
 
         print("\n===== HMM 隐状态分布（0 ~ n_states-1） =====")
         print(df_feat["hmm_state"].value_counts(normalize=True))
@@ -1039,12 +1055,13 @@ def main() -> None:
     ]
     # 如果 HMM 跑成功，会多两列
     if "hmm_state" in df_feat.columns:
-        cols_out += ["hmm_state", "hmm_state_label"]
+        cols_out += ["hmm_state", "hmm_state_label"] + [f"hmm_p{k}" for k in range(5)]
 
     df_out = df_feat[cols_out].copy()
 
     df_out.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
 
+    print("HMM proba columns:", [c for c in df_out.columns if c.startswith("hmm_p")]) 
     print("Saved classified data to:", OUTPUT_CSV)
     print(df_out.tail())
 
