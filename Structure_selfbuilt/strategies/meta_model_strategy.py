@@ -10,6 +10,36 @@ import tensorflow as tf
 
 from strategies.base_strategy import BaseStrategy
 
+from tensorflow.keras.layers import InputLayer
+
+
+class CompatibleInputLayer(InputLayer):
+    """兼容包含 batch_shape 配置的 InputLayer."""
+
+    def __init__(self, *args, **kwargs):
+        # 把老模型配置里传进来的 batch_shape 拿出来
+        batch_shape = kwargs.pop("batch_shape", None)
+
+        # 如果有 batch_shape 且没显式给 input_shape，就自己推一个
+        # 比如 batch_shape = (None, 60, 5) => input_shape = (60, 5)
+        if batch_shape is not None and "input_shape" not in kwargs and len(batch_shape) > 1:
+            kwargs["input_shape"] = tuple(batch_shape[1:])
+
+        # 交给原来的 InputLayer 处理
+        super().__init__(*args, **kwargs)
+
+# 新增：兼容 DTypePolicy
+
+from tensorflow.keras.mixed_precision import Policy as BasePolicy
+
+
+class DTypePolicy(BasePolicy):
+    """
+    兼容模型里使用的 'DTypePolicy'。
+    继承自 tf.keras.mixed_precision.Policy，让反序列化时能找到这个类。
+    """
+    pass
+
 # 禁用 TensorFlow 的非错误日志
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -87,7 +117,14 @@ class LSTMModel:
         self.device = '/GPU:0' if torch.cuda.is_available() else '/CPU:0'
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"LSTM 模型文件不存在: {model_path}")
-        self.model = load_model(model_path)
+        self.model = load_model(
+    model_path,
+    custom_objects={
+        "InputLayer": CompatibleInputLayer,
+        "DTypePolicy": DTypePolicy,
+    },
+    compile=False,
+)
         self.lookback = lookback
 
         # 如果有保存好的 y-scaler
