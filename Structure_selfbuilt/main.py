@@ -1,86 +1,72 @@
+# main.py
 import os
+import pandas as pd
 from config.config import BROKER_CONFIG
 from utils.data_fetcher import DataFetcher
 
-# 状态识别
-from strategies.hmm_meta_hybrid_strategy import HMMMetaHybridStrategy
-from strategies.meta_model_strategy import MetaModelStrategy
-# 交易策略
-from strategies.ma_strategy import MovingAverageStrategy
-from strategies.macd_strategy import MACDStrategy
-from strategies.rsi_strategy import RSIStrategy
-from strategies.bollinger_strategy import BollingerStrategy
+# 导入状态识别
+from regime_hmm import compute_states_from_df
 
-# 预测模型
+# 导入策略
+from strategies.ma_strategy import MovingAverageStrategy
+from strategies.state_driven_strategy import StateDrivenStrategy
 from strategies.meta_model_strategy import MetaModelStrategy
-from strategies.nlp_sentiment_strategy import NLPSentimentStrategy
 
 from backtest.backtester import Backtester
-from live.trader import LiveTrader
 
 def main():
-    # ========== 1. 获取或加载历史数据 ==========
+    # ========== 1. 加载数据 ==========
     fetcher = DataFetcher()
+    # 注意：read_data_from_csv 会自动在路径前加 'data/'
+    # 所以只需传入文件名
     filename = "601788_SH.csv"
-    file_path = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\601788_SH.csv"
+    df = fetcher.read_data_from_csv(filename)
 
-    if not os.path.exists(file_path):
-        print(f"未检测到 {filename}，开始下载历史数据...")
-        df = fetcher.get_historical_data(ts_code="000001.SZ", start_date="20200101", end_date="20211231")
-        fetcher.save_data_to_csv(df, filename)
-    else:
-        print(f"检测到 {filename}，直接读取本地数据...")
-        df = fetcher.read_data_from_csv(file_path)
+    # 或者直接使用 pandas 读取完整路径
+    # df = pd.read_csv(r"data/601788_SH.csv", index_col=0, parse_dates=True)
 
-    # ========== 2. 多策略回测比较 ==========
-    # 2. 多策略回测比较
-    print("开始回测 ...")
+    # ========== 2. 添加市场状态（可选）==========
+    print("计算市场状态...")
+    df_reset = df.reset_index()
+    # 确保第一列重命名为 'date'
+    df_reset = df_reset.rename(columns={df_reset.columns[0]: "date"})
 
-    # 在这里定义你想要对比的多种 selection_mode
-    selection_modes = [
-        'three_models',
-        'lstm_hmm',
-        'lstm_transformer',
-        'hmm_transformer'
-    ]
+    # 调用状态识别函数
+    df_with_states = compute_states_from_df(df_reset)
 
-    for mode in selection_modes:
-        print(f"=== 当前 selection_mode: {mode} ===")
+    # 将 date 设回索引，保持原有索引名
+    df_with_states = df_with_states.set_index("date")
+    df_with_states.index.name = "trade_date"  # 恢复原索引名
 
-        # 每个模式都单独构建一次策略字典
-        strategies = {
-            # 交易策略（会实际产生资金曲线）
-            "MA": MovingAverageStrategy(short_window=5, long_window=20),
-            "MACD": MACDStrategy(),
-            "RSI": RSIStrategy(period=14, rsi_upper=70, rsi_lower=30),
-            "Bollinger": BollingerStrategy(period=20, num_std=2),
+    # ========== 3. 定义策略组合 ==========
+    strategies = {
+        # 基础策略
+        "MA": MovingAverageStrategy(short_window=5, long_window=20),
 
-            # 将 MetaModel 的 selection_mode 改为当前循环的 mode
-            "MetaModel": MetaModelStrategy(
-                lstm_path='utils/models/lstm_model.h5',
-                hmm_path='utils/models/hmm_model.pkl',
-                transformer_path='utils/models/transformer_model_state_dict.pt',
-                lookback=60,
-                selection_mode=mode  # <-- 关键：传入不同的组合模式
-            ),
-            "NLP": NLPSentimentStrategy()
-        }
+        # 状态驱动策略（不使用预测）
+        "StateDriven_NoPred": StateDrivenStrategy(use_prediction=False),
 
-        # 每次都生成一个新的 Backtester 进行回测
-        backtester = Backtester(strategies=strategies, data=df, initial_capital=100000.0)
-        backtester.run_backtest()
+        # 状态驱动策略（使用预测）
+        "StateDriven_WithPred": StateDrivenStrategy(use_prediction=True),
 
-    # ========== 3. 实盘(模拟)交易 ==========
-    print("开始模拟实盘交易(示例) ...")
-    # 只对 MetaModel 做模拟交易：你也可以换成别的
-    meta_strategy = MetaModelStrategy(
-        lstm_path='utils/models/lstm_model.h5',
-        hmm_path='utils/models/hmm_model.pkl',
-        transformer_path='utils/models/transformer_model_state_dict.pt',
-        lookback=60
+        # 元模型策略
+        "MetaModel": MetaModelStrategy(
+            lstm_path='utils/models/lstm_model.h5',
+            hmm_path='utils/models/hmm_model.pkl',
+            transformer_path='utils/models/transformer_model_state_dict.pt',
+            lookback=60,
+            selection_mode='three_models'
+        )
+    }
+
+    # ========== 4. 运行回测 ==========
+    print("开始回测...")
+    backtester = Backtester(
+        strategies=strategies,
+        data=df_with_states,  # 使用带状态的数据
+        initial_capital=100000.0
     )
-    live_trader = LiveTrader(strategy=meta_strategy, broker_config=BROKER_CONFIG)
-    live_trader.start_trading()
+    backtester.run_backtest()
 
 if __name__ == "__main__":
     main()
