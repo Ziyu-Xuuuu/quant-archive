@@ -15,83 +15,70 @@ import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
 
-from tensorflow.keras.models import Sequential, save_model, load_model
+from tensorflow.keras.models import Sequential, save_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
-# ------------------------------------------------------------
-# 1. 数据加载
-# ------------------------------------------------------------
+# 数据加载
 def load_price_data(csv_path: str) -> pd.DataFrame:
-    df = (
-        pd.read_csv(csv_path, index_col=0, parse_dates=True)
-          .loc[:, ['open', 'high', 'low', 'close', 'vol']]
-          .dropna()
-          .sort_index()
-    )
+    df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+    df = df.loc[:, ['open', 'high', 'low', 'close', 'vol']].dropna()
+    df = df.sort_index()
     return df
 
-# ------------------------------------------------------------
-# 2. 数据集构造
-# ------------------------------------------------------------
+# 数据集构造
 def make_dataset(df: pd.DataFrame, lookback: int = 60):
     feature_cols = ['open', 'high', 'low', 'close', 'vol']
-    feat_values  = df[feature_cols].values.astype('float32')
+    feat_values = df[feature_cols].values.astype('float32')
 
     scaler_x = MinMaxScaler((0, 1))
     feat_scaled = scaler_x.fit_transform(feat_values)
 
     X, y = [], []
-    for i in range(len(df) - lookback - 5 + 1):  # 注意：要预留5行用于均值计算
-        X.append(feat_scaled[i: i + lookback])  # 不变
-        y.append(np.mean(feat_scaled[i + lookback: i + lookback + 5, 3]))  # 第3列的均值
+    for i in range(len(df) - lookback - 5 + 1):
+        X.append(feat_scaled[i: i + lookback])
+        y.append(np.mean(feat_scaled[i + lookback: i + lookback + 5, 3]))  # 第3列的均值（close）
 
     return np.array(X), np.array(y), scaler_x
 
-# ------------------------------------------------------------
-# 3. 模型构建
-# ------------------------------------------------------------
+# 构建LSTM模型
 def build_lstm_model(input_shape):
     model = Sequential([
         LSTM(50, return_sequences=True, input_shape=input_shape),
         Dropout(0.2),
         LSTM(100),
         Dropout(0.2),
-        Dense(1)          # 线性输出
+        Dense(1)  # 线性输出
     ])
     model.compile(optimizer=Adam(1e-3), loss='mse')
     return model
 
-# ---------- 反归一化 close 工具 ----------
+# 反归一化工具
 def inverse_close(scaled_close_vec, scaler_x):
-    """把缩放后的 close 列还原到真实价格"""
     dummy = np.zeros((len(scaled_close_vec), 5))
-    dummy[:, 3] = scaled_close_vec       # 仅填充 close，其余列占位
+    dummy[:, 3] = scaled_close_vec  # 仅填充close，其余列占位
     return scaler_x.inverse_transform(dummy)[:, 3]
-# ----------------------------------------
 
-# ------------------------------------------------------------
-# 4. 主流程
-# ------------------------------------------------------------
+# 主流程
 if __name__ == "__main__":
-    # —— 配置路径
-    csv_path  = r"C:\Users\user\Documents\GitHub\trader\Stock_Trade\data\601788_SH.csv"
-    model_dir = r"C:\Users\user\Documents\GitHub\trader\Stock_Trade\utils\models"
+    # 配置路径
+    csv_path = "data/601788_SH.csv"  # 修改为你自己的路径
+    model_dir = "utils/models"
     os.makedirs(model_dir, exist_ok=True)
 
-    # —— 加载数据
+    # 加载数据
     df = load_price_data(csv_path)
     lookback = 60
     X, y, scaler_x = make_dataset(df, lookback)
 
-    # —— 时间顺序划分 80/20
+    # 时间顺序划分80/20
     split_idx = int(len(X) * 0.8)
     X_train, X_test = X[:split_idx], X[split_idx:]
     y_train, y_test = y[:split_idx], y[split_idx:]
 
-    # —— 构建并训练模型
+    # 构建并训练模型
     model = build_lstm_model(input_shape=(lookback, X.shape[-1]))
     history = model.fit(
         X_train, y_train,
@@ -101,27 +88,25 @@ if __name__ == "__main__":
         verbose=2
     )
 
-    # —— 评估
+    # 评估
     test_mse = model.evaluate(X_test, y_test, verbose=0)
     print(f"\nTest MSE = {test_mse:.4f}")
     y_pred_scaled = model.predict(X_test, verbose=0).flatten()
-    y_true = inverse_close(y_test,  scaler_x)
+    y_true = inverse_close(y_test, scaler_x)
     y_pred = inverse_close(y_pred_scaled, scaler_x)
     print(f"Test MAE = {mean_absolute_error(y_true, y_pred):.4f}")
 
-    # —— 保存
-    model_path  = os.path.join(model_dir, "lstm_model.h5")
+    # 保存
+    model_path = os.path.join(model_dir, "lstm_model.h5")
     scaler_path = os.path.join(model_dir, "lstm_close_scaler.pkl")
     save_model(model, model_path)
     joblib.dump(scaler_x, scaler_path)
     print(f"\n模型已保存至: {model_path}")
     print(f"Scaler 已保存至: {scaler_path}")
 
-    # --------------------------------------------------------
-    # 5. 可视化
-    # --------------------------------------------------------
+    # 可视化
     # 5-1 训练 & 验证损失
-    plt.figure(figsize=(8,4))
+    plt.figure(figsize=(8, 4))
     plt.plot(history.history["loss"], label="Train MSE")
     plt.plot(history.history["val_loss"], label="Val MSE")
     plt.title("Training vs Validation Loss")
@@ -133,7 +118,7 @@ if __name__ == "__main__":
 
     # 5-2 真实价 vs 预测价（测试集）
     test_dates = df.index[-len(y_true):]
-    plt.figure(figsize=(12,5))
+    plt.figure(figsize=(12, 5))
     plt.plot(test_dates, y_true, label="Actual Close")
     plt.plot(test_dates, y_pred, label="Predicted Close")
     plt.title("Actual vs Predicted Close (Test Set)")
@@ -145,7 +130,7 @@ if __name__ == "__main__":
 
     # 5-3 残差分布
     residuals = y_true - y_pred
-    plt.figure(figsize=(6,4))
+    plt.figure(figsize=(6, 4))
     plt.hist(residuals, bins=30)
     plt.title("Prediction Residuals")
     plt.xlabel("Actual − Predicted (Price)")
