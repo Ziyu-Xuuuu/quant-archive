@@ -26,12 +26,11 @@ def main():
         "trend_regime", "vol_regime", "state"
     ]
     if "hmm_state" in df_states.columns:
-        cols_out += ["hmm_state", "hmm_state_label"]
+        cols_out += ["hmm_state", "hmm_state_label"] + [f"hmm_p{k}" for k in range(5)]
 
     df_states[cols_out].to_csv(OUTPUT_CSV, encoding="utf-8-sig")
     print("saved to:", OUTPUT_CSV)
     print(df_states[cols_out].tail())
-
 
 if __name__ == "__main__":
     main()
