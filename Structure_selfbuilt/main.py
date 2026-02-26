@@ -2,6 +2,9 @@ import os
 from config.config import BROKER_CONFIG
 from utils.data_fetcher import DataFetcher
 
+# 状态识别
+from strategies.hmm_meta_hybrid_strategy import HMMMetaHybridStrategy
+from strategies.meta_model_strategy import MetaModelStrategy
 # 交易策略
 from strategies.ma_strategy import MovingAverageStrategy
 from strategies.macd_strategy import MACDStrategy
@@ -19,7 +22,7 @@ def main():
     # ========== 1. 获取或加载历史数据 ==========
     fetcher = DataFetcher()
     filename = "601788_SH.csv"
-    file_path = r"C:\Users\user\Documents\GitHub\trader\Stock_Trade\data\601788_SH.csv"
+    file_path = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\601788_SH.csv"
 
     if not os.path.exists(file_path):
         print(f"未检测到 {filename}，开始下载历史数据...")
