@@ -20,7 +20,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 # ====== 路径（按需改）======
 DATA_PATH = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\market_states_601788_SH_with_labels.csv"
-MODEL_OUT = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\transformer_model.keras"
+MODEL_OUT = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\new\transformer_model.keras"
 
 # ====== 超参数 ======
 N = 30  # 序列窗口长度
