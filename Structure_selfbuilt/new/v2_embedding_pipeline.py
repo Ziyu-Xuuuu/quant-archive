@@ -32,7 +32,7 @@ print("Columns before saving:", df.columns.tolist())  # 打印列名确认是否
 
 # === 6. 选择要保存的列 ===
 cols_out = [
-    "ts_code", "open", "high", "low", "close", "vol",
+    "trade_date","ts_code", "open", "high", "low", "close", "vol",
     "trend_regime", "vol_regime", "state", "y",  # 包括 y 列
     "hmm_state", "hmm_state_label",  # 包含 HMM 状态列
     "hmm_p0", "hmm_p1", "hmm_p2", "hmm_p3", "hmm_p4"  # 包含 HMM 概率列
