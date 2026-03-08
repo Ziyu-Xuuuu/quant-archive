@@ -7,10 +7,6 @@ import numpy as np
 from regime_hmm import compute_states_from_df
 
 
-# =========================
-# 配置区
-# =========================
-
 BASE_DIR = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt"
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
@@ -26,8 +22,6 @@ H = 5
 WINDOW = 30
 SECTOR_NAME = "broker"
 
-# 这里填同板块股票标准化后的文件
-# 格式: (输入csv文件名, 股票代码)
 STOCK_FILES = [
     ("002736_SZSE_standardized.csv", "002736.SZ"),
     ("600999_SHE_standardized.csv", "600999.SH"),
@@ -36,27 +30,17 @@ STOCK_FILES = [
 ]
 
 
-# =========================
-# 工具函数
-# =========================
-
 def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def load_raw_csv(path: str) -> pd.DataFrame:
-    """
-    读取标准化后的 CSV。
-    兼容:
-    - trade_date
-    - date
-    - 第一列为日期列
+def parse_yyyymmdd_series(series: pd.Series) -> pd.Series:
+    s = series.astype(str).str.strip()
+    return pd.to_datetime(s, format="%Y%m%d", errors="coerce")
 
-    保留两份日期:
-    1. 原始字符串日期: trade_date_raw
-    2. 内部计算日期: trade_date(datetime)
-    """
-    df = pd.read_csv(path, encoding="utf-8-sig")
+
+def load_raw_csv(path: str) -> pd.DataFrame:
+    df = pd.read_csv(path, encoding="utf-8-sig", dtype={"trade_date": str, "date": str})
 
     if "trade_date" not in df.columns and "date" not in df.columns:
         first_col = df.columns[0]
@@ -64,22 +48,18 @@ def load_raw_csv(path: str) -> pd.DataFrame:
 
     if "trade_date" in df.columns:
         df["trade_date_raw"] = df["trade_date"].astype(str).str.strip()
-        df["trade_date"] = pd.to_datetime(df["trade_date"], errors="coerce")
+        df["trade_date"] = parse_yyyymmdd_series(df["trade_date_raw"])
         df = df.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
 
     elif "date" in df.columns:
         df["trade_date_raw"] = df["date"].astype(str).str.strip()
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["date"] = parse_yyyymmdd_series(df["trade_date_raw"])
         df = df.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
 
     return df
 
 
 def normalize_columns(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
-    """
-    统一成 compute_states_from_df 需要的格式:
-    date, ts_code, open, high, low, close, vol
-    """
     df = df.copy()
 
     date_candidates = [c for c in ["date", "trade_date", "交易日期"] if c in df.columns]
@@ -110,7 +90,6 @@ def normalize_columns(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
 
     dup_cols = df.columns[df.columns.duplicated()].tolist()
     if dup_cols:
-        print(f"[WARN] {ts_code} 存在重复列，已保留首列并删除重复列: {dup_cols}")
         df = df.loc[:, ~df.columns.duplicated()]
 
     required = ["date", "open", "high", "low", "close"]
@@ -126,21 +105,16 @@ def normalize_columns(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
     else:
         df["ts_code"] = df["ts_code"].fillna(ts_code).astype(str)
 
-    # 保留原始日期字符串
     if "trade_date_raw" not in df.columns:
-        df["trade_date_raw"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        df["trade_date_raw"] = df["date"].astype(str).str.strip()
 
-    # 内部计算使用 datetime
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["date"] = parse_yyyymmdd_series(df["trade_date_raw"])
     df = df.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
 
     return df
 
 
 def clean_price_data(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
-    """
-    清理非法价格，避免 log / GARCH / HMM 崩掉
-    """
     df = df.copy()
 
     price_cols = ["open", "high", "low", "close"]
@@ -153,10 +127,6 @@ def clean_price_data(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
     bad_mask = df[price_cols].isna().any(axis=1)
     bad_mask |= (df[price_cols] <= 0).any(axis=1)
 
-    bad_count = int(bad_mask.sum())
-    if bad_count > 0:
-        print(f"[WARN] {ts_code} 删除 {bad_count} 行非法价格数据（NaN/0/负数）")
-
     df = df.loc[~bad_mask].copy()
     df = df.sort_values("date").reset_index(drop=True)
 
@@ -167,15 +137,14 @@ def clean_price_data(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
 
 
 def make_with_labels(df_states: pd.DataFrame, h: int = 5) -> pd.DataFrame:
-    """
-    从 compute_states_from_df 输出结果生成 with_labels
-    """
     df = df_states.copy()
 
     if "date" in df.columns and "trade_date" not in df.columns:
         df = df.rename(columns={"date": "trade_date"})
 
-    df["trade_date"] = pd.to_datetime(df["trade_date"], errors="coerce")
+    if not pd.api.types.is_datetime64_any_dtype(df["trade_date"]):
+        df["trade_date"] = parse_yyyymmdd_series(df["trade_date"])
+
     df = df.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
 
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
@@ -190,11 +159,6 @@ def make_with_labels(df_states: pd.DataFrame, h: int = 5) -> pd.DataFrame:
 
 
 def format_with_labels_output(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
-    """
-    强制整理成固定输出格式：
-    trade_date,ts_code,open,high,low,close,vol,trend_regime,vol_regime,state,y,
-    hmm_state,hmm_state_label,hmm_p0,hmm_p1,hmm_p2,hmm_p3,hmm_p4
-    """
     df = df.copy()
 
     if "ts_code" not in df.columns:
@@ -213,7 +177,9 @@ def format_with_labels_output(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = np.nan
 
-    df["trade_date"] = pd.to_datetime(df["trade_date"], errors="coerce")
+    if not pd.api.types.is_datetime64_any_dtype(df["trade_date"]):
+        df["trade_date"] = parse_yyyymmdd_series(df["trade_date"])
+
     df = df.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
 
     numeric_cols = [
@@ -224,16 +190,12 @@ def format_with_labels_output(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # 输出时统一成 YYYY-MM-DD
     df["trade_date"] = df["trade_date"].dt.strftime("%Y-%m-%d")
 
     return df[required_output_cols].copy()
 
 
 def run_generate_embeddings(input_csv: str, output_csv: str) -> None:
-    """
-    调用 Generate_embeddings.py
-    """
     cmd = [
         sys.executable,
         GENERATE_EMBED_SCRIPT,
@@ -245,14 +207,8 @@ def run_generate_embeddings(input_csv: str, output_csv: str) -> None:
         "--qt_layer", "qt",
         "--yhat_layer", "y_hat",
     ]
-
-    print("[RUN]", " ".join(cmd))
     subprocess.run(cmd, check=True)
 
-
-# =========================
-# 主流程
-# =========================
 
 def main():
     ensure_dir(PROCESSED_DIR)
@@ -268,58 +224,46 @@ def main():
             print(f"[SKIP] 文件不存在: {raw_path}")
             continue
 
-        # 1) 读取数据
         df_raw = load_raw_csv(raw_path)
-
-        # 2) 统一列格式
         df_norm = normalize_columns(df_raw, ts_code=ts_code)
-
-        # 3) 清理非法价格
         df_norm = clean_price_data(df_norm, ts_code=ts_code)
 
         if len(df_norm) < 60:
             print(f"[SKIP] {ts_code} 清洗后样本太少: {len(df_norm)}")
             continue
 
-        # 4) 计算状态/HMM特征
         df_states = compute_states_from_df(df_norm)
 
-        # 把原始日期字符串按日期对齐补回去
         if "date" in df_states.columns and "trade_date_raw" in df_norm.columns:
             raw_date_map = df_norm[["date", "trade_date_raw"]].drop_duplicates(subset=["date"])
             df_states = df_states.merge(raw_date_map, on="date", how="left")
 
-        # 5) 生成 with_labels
         df_with_labels = make_with_labels(df_states, h=H)
 
-        # 优先使用原始日期字符串
         if "trade_date_raw" in df_with_labels.columns:
             mask = df_with_labels["trade_date_raw"].notna()
-            df_with_labels.loc[mask, "trade_date"] = df_with_labels.loc[mask, "trade_date_raw"]
+            df_with_labels.loc[mask, "trade_date"] = pd.to_datetime(
+                df_with_labels.loc[mask, "trade_date_raw"].astype(str).str.strip(),
+                format="%Y%m%d",
+                errors="coerce"
+            )
 
-        # 6) 整理为固定输出格式
         df_with_labels = format_with_labels_output(df_with_labels, ts_code=ts_code)
 
-        # 7) 保存 with_labels
         with_labels_name = f"{ts_code.replace('.', '_')}_market_states_with_labels.csv"
         with_labels_path = os.path.join(PROCESSED_DIR, with_labels_name)
         df_with_labels.to_csv(with_labels_path, index=False, encoding="utf-8-sig")
         print(f"[OK] saved with_labels: {with_labels_path}")
-        print(f"[OK] with_labels columns: {df_with_labels.columns.tolist()}")
 
-        # 8) 生成 embeddings
         embeddings_name = f"{ts_code.replace('.', '_')}_embeddings_ht_qt.csv"
         embeddings_path = os.path.join(PROCESSED_DIR, embeddings_name)
 
         run_generate_embeddings(with_labels_path, embeddings_path)
-
-        # 9) 给后续 merge 记录
         embedding_files.append((embeddings_path, ts_code))
 
     if len(embedding_files) == 0:
         raise RuntimeError("没有成功生成任何 embeddings 文件。")
 
-    # 10) 合并成板块级经验库
     merged = []
     for emb_path, ts_code in embedding_files:
         df = pd.read_csv(emb_path, encoding="utf-8-sig")
@@ -329,18 +273,15 @@ def main():
 
         df["source_stock"] = ts_code
         df["sector_name"] = SECTOR_NAME
-
         merged.append(df)
 
     df_merged = pd.concat(merged, axis=0, ignore_index=True)
     df_merged.to_csv(MERGED_OUTPUT, index=False, encoding="utf-8-sig")
 
-    print("=" * 80)
-    print("[DONE] merged sector memory saved to:")
     print(MERGED_OUTPUT)
-    print("shape:", df_merged.shape)
-    print(df_merged[["ts_code", "source_stock", "sector_name"]].head())
+    print(df_merged.shape)
 
 
 if __name__ == "__main__":
     main()
+
