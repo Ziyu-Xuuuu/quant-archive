@@ -178,22 +178,31 @@ def format_with_labels_output(df: pd.DataFrame, ts_code: str) -> pd.DataFrame:
             df[col] = np.nan
 
     if not pd.api.types.is_datetime64_any_dtype(df["trade_date"]):
-        df["trade_date"] = parse_yyyymmdd_series(df["trade_date"])
+        df["trade_date"] = pd.to_datetime(
+            df["trade_date"].astype(str).str.strip(),
+            format="%Y-%m-%d",
+            errors="coerce"
+        )
 
     df = df.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
 
+    # 只转换真正的数值列
     numeric_cols = [
         "open", "high", "low", "close", "vol",
-        "trend_regime", "vol_regime", "state", "y",
-        "hmm_state", "hmm_p0", "hmm_p1", "hmm_p2", "hmm_p3", "hmm_p4"
+        "y", "hmm_state",
+        "hmm_p0", "hmm_p1", "hmm_p2", "hmm_p3", "hmm_p4"
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # 字符串列不要转 numeric
+    string_cols = ["ts_code", "trend_regime", "vol_regime", "state", "hmm_state_label"]
+    for col in string_cols:
+        df[col] = df[col].where(df[col].notna(), pd.NA)
+
     df["trade_date"] = df["trade_date"].dt.strftime("%Y-%m-%d")
 
     return df[required_output_cols].copy()
-
 
 def run_generate_embeddings(input_csv: str, output_csv: str) -> None:
     cmd = [
