@@ -5,11 +5,6 @@
 # 3) 加载已训练的 Keras export_model（含 ht/qt/y_hat）
 # 4) 生成 ht / qt / y_hat
 # 5) 保存 embeddings_ht_qt.csv
-#
-# 适配：
-# - Train_transformer.py输出的 models/transformer_model.keras
-# - 模型含自定义层 L2Normalize
-
 
 import argparse
 import os
@@ -72,13 +67,12 @@ def build_seq_dataset(
       X_seq: (samples, window, feat_dim)
       y:     (samples,)
       end_dates: (samples,)  窗口末端日期（或索引）
-      end_indices: (samples,) 窗口末端在 df 中的行号
+      end_indices: (samples,) 窗口末端在 df 中的行号（用于 t_index）
     """
     if keep_only_labeled:
         df = df.copy()
         df = df.dropna(subset=[label_col]).reset_index(drop=True)
 
-    # 日期列
     if date_col is not None and date_col in df.columns:
         end_dates_src = df[date_col].values
     else:
@@ -90,7 +84,7 @@ def build_seq_dataset(
     X_list, y_list, d_list, idx_list = [], [], [], []
 
     for t in range(window - 1, len(df)):
-        x_win = feat[t - (window - 1) : t + 1, :]  # (window, feat_dim)
+        x_win = feat[t - (window - 1): t + 1, :]  # (window, feat_dim)
         y_t = yv[t]
         if np.isnan(x_win).any() or pd.isna(y_t):
             continue
@@ -176,7 +170,7 @@ def main():
     )
     print("[INFO] model.input_shape:", model.input_shape)
 
-    # 5) 构造一个导出模型：输出 ht/qt/y_hat
+    # 5) 构造导出模型：输出 ht/qt/y_hat
     ht_layer_name = args.ht_layer.strip()
     qt_layer_name = args.qt_layer.strip()
     yhat_layer_name = args.yhat_layer.strip()
@@ -194,7 +188,6 @@ def main():
     try:
         yhat_tensor = model.get_layer(yhat_layer_name).output
     except Exception:
-        # 兜底：如果找不到 y_hat 层，就用 model.output
         yhat_tensor = model.output
 
     export_model = tf.keras.Model(
@@ -213,22 +206,33 @@ def main():
     print(f"[INFO] qt shape: {qt_all.shape}")
     print(f"[INFO] y_hat shape: {yhat_all.shape}")
 
-    # 7) 输出 dataframe（附带元信息列，如果存在就带上）
+    # 7) 输出 dataframe
     out = pd.DataFrame({
-        "y": y,
-        "y_hat": yhat_all,
+    "y": y,
+    "y_hat": yhat_all,
+    "end_idx": end_idx.astype(int),   # ✅ 保留原 end_idx 便于调试
     })
 
+   # trade_date
     if date_col is not None and date_col in df.columns:
-        out[date_col] = end_dates
+        td = pd.to_datetime(pd.Series(end_dates), errors="coerce")
+        out["trade_date"] = td.dt.strftime("%Y-%m-%d").values
     else:
-        out["t_index"] = end_dates
+        out["trade_date"] = pd.NA
+
+   # 关键：t_index 用 trade_date 排序后的序号（保证与回测 df 一致）
+    out["_td_sort"] = pd.to_datetime(out["trade_date"], errors="coerce")
+    out = out.sort_values(["_td_sort", "end_idx"]).reset_index(drop=True)
+    out["t_index"] = np.arange(len(out), dtype=int)
+    out = out.drop(columns=["_td_sort"])
+
 
     # 可选 meta 列：若存在就拼上
-    meta_cols = [c for c in ["ts_code", "close", "open", "high", "low", "vol",
-                             "trend_regime", "vol_regime", "state",
-                             "hmm_state", "hmm_state_label"]
-                 if c in df.columns]
+    meta_cols = [c for c in [
+        "ts_code", "close", "open", "high", "low", "vol", "volume",
+        "trend_regime", "vol_regime", "state",
+        "hmm_state", "hmm_state_label"
+    ] if c in df.columns]
     if meta_cols:
         meta_df = df.loc[end_idx, meta_cols].reset_index(drop=True)
         out = pd.concat([out.reset_index(drop=True), meta_df], axis=1)
@@ -241,10 +245,12 @@ def main():
     for i in range(qt_all.shape[1]):
         out[f"qt_{i}"] = qt_all[:, i]
 
-    # 排序
-    if date_col is not None and date_col in out.columns:
-        out[date_col] = pd.to_datetime(out[date_col], errors="coerce")
-        out = out.sort_values(date_col).reset_index(drop=True)
+    # 排序（按 trade_date 优先；否则按 t_index）
+    if out["trade_date"].notna().any():
+        out["_td_sort"] = pd.to_datetime(out["trade_date"], errors="coerce")
+        out = out.sort_values(["_td_sort", "t_index"]).drop(columns=["_td_sort"]).reset_index(drop=True)
+    else:
+        out = out.sort_values("t_index").reset_index(drop=True)
 
     # 8) 保存
     if os.path.dirname(out_path):
@@ -252,6 +258,7 @@ def main():
 
     out.to_csv(out_path, index=False, encoding="utf-8-sig")
     print(f"[OK] Saved embeddings to: {out_path}")
+    print("[INFO] output columns (head):", list(out.columns)[:30])
     print(out.tail())
 
 

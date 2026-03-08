@@ -12,15 +12,19 @@ try:
 except Exception as e:
     raise ImportError("faiss 未安装，请先 pip install faiss-cpu") from e
 
+
 DEFAULT_QUERY_CONFIG = {
-    "memory_dir": r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\new\601788",
-    "embeddings": r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\embeddings_ht_qt.csv",
+    "memory_dir": r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\new\memory\broker",
+    "query_embeddings": r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\embeddings_ht_qt.csv",
     "topk": 30,
     "holding_days": 5,
     "min_gap": 10
 }
 
+
+# =========================
 # Utils
+# =========================
 def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
@@ -63,8 +67,7 @@ def read_embeddings_csv(path: str) -> pd.DataFrame:
 def get_qt_cols(df: pd.DataFrame) -> List[str]:
     qt_cols = [c for c in df.columns if c.startswith("qt_")]
     if len(qt_cols) == 0:
-        raise ValueError("找不到 qt_* 列，请确认 embeddings_ht_qt.csv 是否包含 qt_0...qt_{d-1}")
-    # 按数字排序
+        raise ValueError("找不到 qt_* 列，请确认输入文件是否包含 qt_0...qt_{d-1}")
     qt_cols = sorted(qt_cols, key=lambda x: int(x.split("_")[1]))
     return qt_cols
 
@@ -74,7 +77,9 @@ def l2_normalize_rows(x: np.ndarray, eps: float = 1e-12) -> np.ndarray:
     return x / np.clip(n, eps, None)
 
 
-# Experience (offline computed)
+# =========================
+# Experience
+# =========================
 @dataclass
 class Outcome:
     fwd_ret: float
@@ -95,6 +100,7 @@ def compute_outcome_long(
     """
     对第 i 行作为入场点（long），用未来 H 天的 high/low 判断 TP/SL 命中与先后。
     若没有 high/low，则退化用 close 近似。
+    注意：这里 df 必须是“单股票内部按时间排序后的子表”。
     """
     entry = float(df.loc[i, "close"])
     end_i = min(i + H, len(df) - 1)
@@ -102,23 +108,19 @@ def compute_outcome_long(
     has_high = "high" in df.columns
     has_low = "low" in df.columns
 
-    # 未来路径（包含 i+1 ... i+H）
     future = df.iloc[i + 1:end_i + 1].copy()
     if future.empty:
         return Outcome(0.0, 0.0, 0, 0, "NONE", -1)
 
-    # 用 close 计算最终收益
     exit_price = float(df.loc[end_i, "close"])
     fwd_ret = float(np.log(exit_price) - np.log(entry))
 
-    # 计算回撤（long：最低点相对 entry 的跌幅）
     if has_low:
         min_low = float(future["low"].min())
     else:
         min_low = float(future["close"].min())
     fwd_mdd = float(max(0.0, (entry - min_low) / entry))
 
-    # TP/SL 触发判断与先后
     tp_level = entry * (1.0 + take_profit)
     sl_level = entry * (1.0 - stop_loss)
 
@@ -135,8 +137,7 @@ def compute_outcome_long(
         sl_now = lo <= sl_level
 
         if tp_now and sl_now:
-            # 同一天同时触发：保守起见当作 SL 先
-            first_hit = "SL"
+            first_hit = "SL"   # 保守处理
             sl_hit = 1
             tp_hit = 1
             hit_day = k
@@ -152,7 +153,14 @@ def compute_outcome_long(
             hit_day = k
             break
 
-    return Outcome(fwd_ret=fwd_ret, fwd_mdd=fwd_mdd, tp_hit=tp_hit, sl_hit=sl_hit, first_hit=first_hit, hit_day=hit_day)
+    return Outcome(
+        fwd_ret=fwd_ret,
+        fwd_mdd=fwd_mdd,
+        tp_hit=tp_hit,
+        sl_hit=sl_hit,
+        first_hit=first_hit,
+        hit_day=hit_day
+    )
 
 
 def simple_policy_action(y_hat: float, buy_th: float, sell_th: float) -> str:
@@ -164,12 +172,6 @@ def simple_policy_action(y_hat: float, buy_th: float, sell_th: float) -> str:
 
 
 def simple_policy_position(action: str, y_hat: float) -> float:
-    """
-    一个简单仓位映射：
-    - BUY:   position = clip((y_hat-0.5)/0.5, 0..1)
-    - SELL:  0
-    - HOLD:  0.5
-    """
     if action == "BUY":
         pos = (y_hat - 0.5) / 0.5
         return float(np.clip(pos, 0.0, 1.0))
@@ -219,7 +221,9 @@ def build_explanation(row: pd.Series, outcome: Outcome) -> str:
     return " | ".join(parts)
 
 
+# =========================
 # FAISS IO
+# =========================
 def save_artifacts(index, metric: str, df_meta: pd.DataFrame, out_dir: str) -> None:
     ensure_dir(out_dir)
     faiss.write_index(index, os.path.join(out_dir, "faiss.index"))
@@ -267,80 +271,89 @@ def load_artifacts(memory_dir: str):
     return index, cfg.get("metric", "cosine"), meta, cfg
 
 
-# Build
-def build_memory(args) -> None:
-    df = read_embeddings_csv(args.embeddings)
-    qt_cols = get_qt_cols(df)
+# =========================
+# Build helper
+# =========================
+def compute_group_outcomes(meta: pd.DataFrame, args) -> pd.DataFrame:
+    """
+    对多股票合并表，必须按 ts_code 分组、组内按时间排序后计算 future outcome。
+    否则 i+1...i+H 会串到别的股票。
+    """
+    meta = meta.copy()
 
-    qt = df[qt_cols].values.astype("float32")
-    if args.cosine:
-        qt = l2_normalize_rows(qt).astype("float32")
-        metric = "cosine"
-        index = faiss.IndexFlatIP(qt.shape[1])  # cosine -> IP with normalized vectors
-    else:
-        metric = "l2"
-        index = faiss.IndexFlatL2(qt.shape[1])
+    if "trade_date" in meta.columns:
+        meta["trade_date"] = pd.to_datetime(meta["trade_date"], errors="coerce")
 
-    index.add(qt)
-
-    # 经验字段：动作/仓位/风控/持有期/outcome/解释
-    meta = df.copy()
-
-    # 若没有 t_index 就补一个
     if "t_index" not in meta.columns:
         meta["t_index"] = np.arange(len(meta), dtype=int)
+
+    actions = pd.Series(index=meta.index, dtype=object)
+    positions = pd.Series(index=meta.index, dtype=float)
+    vols = pd.Series(index=meta.index, dtype=float)
+    sls = pd.Series(index=meta.index, dtype=float)
+    tps = pd.Series(index=meta.index, dtype=float)
+    fwd_rets = pd.Series(index=meta.index, dtype=float)
+    fwd_mdds = pd.Series(index=meta.index, dtype=float)
+    tp_hits = pd.Series(index=meta.index, dtype=float)
+    sl_hits = pd.Series(index=meta.index, dtype=float)
+    first_hits = pd.Series(index=meta.index, dtype=object)
+    hit_days = pd.Series(index=meta.index, dtype=float)
+    explains = pd.Series(index=meta.index, dtype=object)
 
     H = int(args.holding_days)
     buy_th = float(args.buy_th)
     sell_th = float(args.sell_th)
 
-    actions = []
-    positions = []
-    vols = []
-    sls = []
-    tps = []
-    fwd_rets = []
-    fwd_mdds = []
-    tp_hits = []
-    sl_hits = []
-    first_hits = []
-    hit_days = []
-    explains = []
+    if "ts_code" in meta.columns:
+        groups = meta.groupby("ts_code", sort=False)
+    else:
+        groups = [(None, meta)]
 
-    for i in range(len(meta)):
-        row = meta.iloc[i]
+    for _, g in groups:
+        sort_cols = []
+        if "trade_date" in g.columns:
+            sort_cols.append("trade_date")
+        if "t_index" in g.columns:
+            sort_cols.append("t_index")
+        if not sort_cols:
+            sort_cols = list(g.columns[:1])
 
-        y_hat = float(row["y_hat"]) if "y_hat" in meta.columns and pd.notna(row["y_hat"]) else 0.5
-        action = simple_policy_action(y_hat, buy_th=buy_th, sell_th=sell_th)
-        position = simple_policy_position(action, y_hat)
+        g = g.sort_values(sort_cols).copy().reset_index()
+        # g["index"] 是原 meta 的索引
 
-        vol, sl, tp = compute_risk_params(
-            row=row,
-            sl_mult=float(args.sl_mult),
-            tp_mult=float(args.tp_mult),
-            sl_floor=float(args.sl_floor),
-            tp_floor=float(args.tp_floor),
-            sl_cap=float(args.sl_cap),
-            tp_cap=float(args.tp_cap),
-        )
+        for i in range(len(g)):
+            row = g.iloc[i]
+            global_idx = int(row["index"])
 
-        # 这里只实现 long 的 outcome
-        # 如果未来要做做空经验库，可以再扩展 compute_outcome_short
-        outcome = compute_outcome_long(meta, i=i, H=H, stop_loss=sl, take_profit=tp)
-        exp = build_explanation(row, outcome)
+            y_hat = float(row["y_hat"]) if "y_hat" in g.columns and pd.notna(row["y_hat"]) else 0.5
+            action = simple_policy_action(y_hat, buy_th=buy_th, sell_th=sell_th)
+            position = simple_policy_position(action, y_hat)
 
-        actions.append(action)
-        positions.append(position)
-        vols.append(vol)
-        sls.append(sl)
-        tps.append(tp)
-        fwd_rets.append(outcome.fwd_ret)
-        fwd_mdds.append(outcome.fwd_mdd)
-        tp_hits.append(outcome.tp_hit)
-        sl_hits.append(outcome.sl_hit)
-        first_hits.append(outcome.first_hit)
-        hit_days.append(outcome.hit_day)
-        explains.append(exp)
+            vol, sl, tp = compute_risk_params(
+                row=row,
+                sl_mult=float(args.sl_mult),
+                tp_mult=float(args.tp_mult),
+                sl_floor=float(args.sl_floor),
+                tp_floor=float(args.tp_floor),
+                sl_cap=float(args.sl_cap),
+                tp_cap=float(args.tp_cap),
+            )
+
+            outcome = compute_outcome_long(g, i=i, H=H, stop_loss=sl, take_profit=tp)
+            exp = build_explanation(row, outcome)
+
+            actions.loc[global_idx] = action
+            positions.loc[global_idx] = position
+            vols.loc[global_idx] = vol
+            sls.loc[global_idx] = sl
+            tps.loc[global_idx] = tp
+            fwd_rets.loc[global_idx] = outcome.fwd_ret
+            fwd_mdds.loc[global_idx] = outcome.fwd_mdd
+            tp_hits.loc[global_idx] = outcome.tp_hit
+            sl_hits.loc[global_idx] = outcome.sl_hit
+            first_hits.loc[global_idx] = outcome.first_hit
+            hit_days.loc[global_idx] = outcome.hit_day
+            explains.loc[global_idx] = exp
 
     meta["action"] = actions
     meta["position"] = positions
@@ -348,7 +361,6 @@ def build_memory(args) -> None:
     meta["stop_loss"] = sls
     meta["take_profit"] = tps
     meta["holding_days"] = H
-
     meta["fwd_ret"] = fwd_rets
     meta["fwd_mdd"] = fwd_mdds
     meta["tp_hit"] = tp_hits
@@ -357,25 +369,52 @@ def build_memory(args) -> None:
     meta["hit_day"] = hit_days
     meta["explain"] = explains
 
+    return meta
+
+
+# =========================
+# Build
+# =========================
+def build_memory(args) -> None:
+    df = read_embeddings_csv(args.sector_embeddings)
+    qt_cols = get_qt_cols(df)
+
+    qt = df[qt_cols].values.astype("float32")
+
+    if args.cosine:
+        qt = l2_normalize_rows(qt).astype("float32")
+        metric = "cosine"
+        index = faiss.IndexFlatIP(qt.shape[1])
+    else:
+        metric = "l2"
+        index = faiss.IndexFlatL2(qt.shape[1])
+
+    index.add(qt)
+
+    meta = df.copy()
+    if "t_index" not in meta.columns:
+        meta["t_index"] = np.arange(len(meta), dtype=int)
+
+    meta = compute_group_outcomes(meta, args)
+
     save_artifacts(index=index, metric=metric, df_meta=meta, out_dir=args.out_dir)
 
     print(f"[OK] memory built: {args.out_dir}")
     print(f" - index size: {index.ntotal}")
     print(f" - metric: {metric}")
     print(f" - meta cols: {meta.shape[1]}")
-    print(f" - holding_days(H): {H}")
+    print(f" - holding_days(H): {int(args.holding_days)}")
 
 
-
-# Query
+# =========================
+# Query helper
+# =========================
 def aggregate_stats(top_df: pd.DataFrame) -> Dict[str, Any]:
-    # 涨跌胜率（如果有 y）
     if "y" in top_df.columns:
         win_rate = float(top_df["y"].astype(float).mean())
     else:
         win_rate = float(np.nan)
 
-    # 收益统计（fwd_ret）
     if "fwd_ret" in top_df.columns:
         rets = top_df["fwd_ret"].astype(float).values
         avg_ret = float(np.nanmean(rets))
@@ -385,18 +424,16 @@ def aggregate_stats(top_df: pd.DataFrame) -> Dict[str, Any]:
     else:
         avg_ret = q25 = q50 = q75 = float(np.nan)
 
-    # 回撤
     if "fwd_mdd" in top_df.columns:
-        mdd_avg = float(np.nanmean(top_df["fwd_mdd"].astype(float).values))
-        mdd_q90 = float(np.nanquantile(top_df["fwd_mdd"].astype(float).values, 0.90))
+        mdd_vals = top_df["fwd_mdd"].astype(float).values
+        mdd_avg = float(np.nanmean(mdd_vals))
+        mdd_q90 = float(np.nanquantile(mdd_vals, 0.90))
     else:
         mdd_avg = mdd_q90 = float(np.nan)
 
-    # 命中率
     tp_hit_rate = float(top_df["tp_hit"].astype(float).mean()) if "tp_hit" in top_df.columns else float(np.nan)
     sl_hit_rate = float(top_df["sl_hit"].astype(float).mean()) if "sl_hit" in top_df.columns else float(np.nan)
 
-    # 先触发分布
     if "first_hit" in top_df.columns:
         dist = top_df["first_hit"].value_counts(normalize=True).to_dict()
         dist = {str(k): float(v) for k, v in dist.items()}
@@ -425,10 +462,11 @@ def decision_from_stats(
     sell_th: float,
 ) -> Tuple[float, str, float]:
     win_rate = stats.get("topk_win_rate", np.nan)
+
     if np.isnan(win_rate):
         p_up = float(query_y_hat)
     else:
-        p_up = float(alpha * query_y_hat + (1 - alpha) * win_rate)
+        p_up = float(alpha * query_y_hat + (1.0 - alpha) * win_rate)
 
     if p_up >= buy_th:
         action = "BUY"
@@ -443,23 +481,25 @@ def decision_from_stats(
     return p_up, action, position
 
 
+# =========================
+# Query
+# =========================
 def query_memory(args) -> None:
     index, metric, meta, cfg = load_artifacts(args.memory_dir)
-    df = read_embeddings_csv(args.embeddings)
+
+    # 这里读取的是“目标个股”的 embeddings，而不是板块总表
+    df = read_embeddings_csv(args.query_embeddings)
     qt_cols = get_qt_cols(df)
     qt_all = df[qt_cols].values.astype("float32")
 
-    # cosine 模式下查询向量也要 normalize
     if metric == "cosine":
         qt_all = l2_normalize_rows(qt_all).astype("float32")
 
-    # query 行
     q_idx = int(args.query_row) if args.query_row is not None else (len(df) - 1)
     q_idx = max(0, min(q_idx, len(df) - 1))
 
-    q = qt_all[q_idx:q_idx + 1]  # (1, d)
+    q = qt_all[q_idx:q_idx + 1]
 
-    # oversample + min_gap 过滤
     k = int(args.topk)
     oversample = max(k * 5, 200)
 
@@ -469,14 +509,22 @@ def query_memory(args) -> None:
 
     q_tidx = int(df.loc[q_idx, "t_index"]) if "t_index" in df.columns and pd.notna(df.loc[q_idx, "t_index"]) else None
     min_gap = int(args.min_gap)
+    exclude_ts_code = args.exclude_ts_code
 
     filtered_I = []
     filtered_D = []
 
     for idx, score in zip(I_all, D_all):
-        if idx is None:
+        if idx is None or idx < 0:
             continue
 
+        # 排除目标股票自身历史
+        if exclude_ts_code is not None and "ts_code" in meta.columns:
+            cand_code = str(meta.iloc[idx].get("ts_code", ""))
+            if cand_code == exclude_ts_code:
+                continue
+
+        # 时间间隔过滤，防止过近样本泄漏
         if q_tidx is not None and "t_index" in meta.columns:
             cand_tidx = meta.iloc[idx].get("t_index", None)
             if cand_tidx is not None and pd.notna(cand_tidx):
@@ -492,25 +540,31 @@ def query_memory(args) -> None:
     if len(filtered_I) == 0:
         raise RuntimeError("过滤后没有可用检索结果：请调小 --min_gap 或增大数据量。")
 
-    # 取 topk meta
     top_meta = meta.iloc[filtered_I].copy().reset_index(drop=True)
     top_meta.insert(0, "_score", filtered_D)
     top_meta.insert(0, "_rank", np.arange(1, len(top_meta) + 1))
 
-    # 展示 query 基本信息
     print("\n========== QUERY ==========")
-    show_cols = [c for c in ["trade_date", "date", "t_index", "ts_code", "state", "trend_regime", "vol_regime", "close", "y", "y_hat"] if c in df.columns]
+    show_cols = [
+        c for c in [
+            "trade_date", "date", "t_index", "ts_code",
+            "state", "trend_regime", "vol_regime",
+            "close", "y", "y_hat"
+        ] if c in df.columns
+    ]
     print(df.loc[q_idx, show_cols] if len(show_cols) > 0 else df.loc[q_idx])
 
-    # 展示 topk 结果（精选字段）
     print("\n========== TOPK RESULTS (filtered) ==========")
-    keep = [c for c in ["_rank", "_score", "t_index", "ts_code", "state", "trend_regime", "vol_regime", "close",
-                       "action", "position", "stop_loss", "take_profit", "holding_days",
-                       "y", "y_hat", "fwd_ret", "fwd_mdd", "tp_hit", "sl_hit", "first_hit", "hit_day"]
-            if c in top_meta.columns]
+    keep = [
+        c for c in [
+            "_rank", "_score", "t_index", "ts_code", "state", "trend_regime",
+            "vol_regime", "close", "action", "position", "stop_loss",
+            "take_profit", "holding_days", "y", "y_hat", "fwd_ret", "fwd_mdd",
+            "tp_hit", "sl_hit", "first_hit", "hit_day"
+        ] if c in top_meta.columns
+    ]
     print(top_meta[keep].to_string(index=False))
 
-    # 统计 + 决策
     stats = aggregate_stats(top_meta)
 
     query_y_hat = float(df.loc[q_idx, "y_hat"]) if "y_hat" in df.columns and pd.notna(df.loc[q_idx, "y_hat"]) else 0.5
@@ -522,7 +576,6 @@ def query_memory(args) -> None:
         sell_th=float(args.sell_th),
     )
 
-    # 风控参数：从 query 行估（和 build 时同逻辑）
     q_row = df.loc[q_idx]
     vol, sl, tp = compute_risk_params(
         row=q_row,
@@ -536,10 +589,15 @@ def query_memory(args) -> None:
 
     decision = {
         "query_row": q_idx,
-        "query_meta": {k: to_py(q_row[k]) for k in ["trade_date", "date", "t_index", "ts_code", "state", "trend_regime", "vol_regime", "close"] if k in df.columns},
+        "query_meta": {
+            k: to_py(q_row[k])
+            for k in ["trade_date", "date", "t_index", "ts_code", "state", "trend_regime", "vol_regime", "close"]
+            if k in df.columns
+        },
         "topk": k,
         "metric": metric,
         "min_gap": min_gap,
+        "exclude_ts_code": exclude_ts_code,
         "stats": {
             **{k: to_py(v) for k, v in stats.items()},
             "query_y_hat": float(query_y_hat),
@@ -566,7 +624,6 @@ def query_memory(args) -> None:
     print("\n========== DECISION JSON ==========")
     print(json.dumps(decision, ensure_ascii=False, indent=2, default=to_py))
 
-    # 可选保存
     if args.out_csv:
         ensure_dir(os.path.dirname(args.out_csv) or ".")
         top_meta.to_csv(args.out_csv, index=False, encoding="utf-8-sig")
@@ -578,49 +635,61 @@ def query_memory(args) -> None:
         print(f"[OK] saved decision json: {args.out_json}")
 
 
+# =========================
 # CLI
+# =========================
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
+
     # BUILD MEMORY
     p_build = sub.add_parser("build")
-    p_build.add_argument("--embeddings",required=True,help="embeddings_ht_qt.csv")
-    p_build.add_argument("--out_dir",required=True, help="memory 输出目录")
-    p_build.add_argument("--cosine",action="store_true",help="使用 cosine 相似度")
-    p_build.add_argument("--holding_days", type=int,default=5,help="forward holding days")
+    p_build.add_argument("--sector_embeddings", required=True, help="sector_embeddings_memory.csv")
+    p_build.add_argument("--out_dir", required=True, help="memory 输出目录")
+    p_build.add_argument("--cosine", action="store_true", help="使用 cosine 相似度")
+    p_build.add_argument("--holding_days", type=int, default=5, help="forward holding days")
+    p_build.add_argument("--buy_th", type=float, default=0.55, help="BUY 阈值")
+    p_build.add_argument("--sell_th", type=float, default=0.45, help="SELL 阈值")
+    p_build.add_argument("--sl_mult", type=float, default=2.0)
+    p_build.add_argument("--tp_mult", type=float, default=3.0)
+    p_build.add_argument("--sl_floor", type=float, default=0.02)
+    p_build.add_argument("--tp_floor", type=float, default=0.03)
+    p_build.add_argument("--sl_cap", type=float, default=0.12)
+    p_build.add_argument("--tp_cap", type=float, default=0.20)
     p_build.set_defaults(func=build_memory)
+
     # QUERY MEMORY
     p_query = sub.add_parser("query")
-    p_query.add_argument("--memory_dir",default=DEFAULT_QUERY_CONFIG["memory_dir"],help="memory 目录")
-    p_query.add_argument( "--embeddings", default=DEFAULT_QUERY_CONFIG["embeddings"],help="embeddings_ht_qt.csv")
-    p_query.add_argument("--query_row",type=int,default=None,help="使用第几行作为 query（默认最后一行）")
-    p_query.add_argument( "--topk",type=int,default=DEFAULT_QUERY_CONFIG["topk"],help="检索 topK")
-    p_query.add_argument("--min_gap",type=int,default=DEFAULT_QUERY_CONFIG["min_gap"],help="最小时间间隔（防止信息泄漏）")
+    p_query.add_argument("--memory_dir", default=DEFAULT_QUERY_CONFIG["memory_dir"], help="memory 目录")
+    p_query.add_argument("--query_embeddings", default=DEFAULT_QUERY_CONFIG["query_embeddings"], help="目标个股 embeddings_ht_qt.csv")
+    p_query.add_argument("--query_row", type=int, default=None, help="使用第几行作为 query（默认最后一行）")
+    p_query.add_argument("--topk", type=int, default=DEFAULT_QUERY_CONFIG["topk"], help="检索 topK")
+    p_query.add_argument("--min_gap", type=int, default=DEFAULT_QUERY_CONFIG["min_gap"], help="最小时间间隔（防止信息泄漏）")
+    p_query.add_argument("--exclude_ts_code", type=str, default=None, help="查询时排除该股票代码")
+
     # DECISION PARAMETERS
-    p_query.add_argument("--holding_days",type=int,default=DEFAULT_QUERY_CONFIG["holding_days"],help="持有天数")
-    p_query.add_argument("--alpha",type=float,default=0.5,help="模型预测 vs 经验胜率融合权重")
-    p_query.add_argument("--buy_th",type=float,default=0.55,help="BUY 阈值" )
-    p_query.add_argument( "--sell_th",type=float,default=0.45,help="SELL 阈值")
+    p_query.add_argument("--holding_days", type=int, default=DEFAULT_QUERY_CONFIG["holding_days"], help="持有天数")
+    p_query.add_argument("--alpha", type=float, default=0.5, help="模型预测 vs 经验胜率融合权重")
+    p_query.add_argument("--buy_th", type=float, default=0.55, help="BUY 阈值")
+    p_query.add_argument("--sell_th", type=float, default=0.45, help="SELL 阈值")
+
     # RISK CONTROL
-    p_query.add_argument("--sl_mult",type=float, default=2.0)
-    p_query.add_argument("--tp_mult",type=float,default=3.0)
-    p_query.add_argument("--sl_floor",type=float,default=0.02)
-    p_query.add_argument("--tp_floor",type=float, default=0.03)
-    p_query.add_argument("--sl_cap",type=float, default=0.12)
-    p_query.add_argument( "--tp_cap",type=float,default=0.20)
+    p_query.add_argument("--sl_mult", type=float, default=2.0)
+    p_query.add_argument("--tp_mult", type=float, default=3.0)
+    p_query.add_argument("--sl_floor", type=float, default=0.02)
+    p_query.add_argument("--tp_floor", type=float, default=0.03)
+    p_query.add_argument("--sl_cap", type=float, default=0.12)
+    p_query.add_argument("--tp_cap", type=float, default=0.20)
+
     # OUTPUT
-    p_query.add_argument("--out_csv",type=str,default=None,help="保存检索结果 csv")
-    p_query.add_argument("--out_json",type=str,default=None,help="保存 decision json")
+    p_query.add_argument("--out_csv", type=str, default=None, help="保存检索结果 csv")
+    p_query.add_argument("--out_json", type=str, default=None, help="保存 decision json")
     p_query.set_defaults(func=query_memory)
-    # RUN
+
     args = parser.parse_args()
     print("[INFO] cmd =", args.cmd)
     args.func(args)
 
 
-
 if __name__ == "__main__":
     main()
-
-
-

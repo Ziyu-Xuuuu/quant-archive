@@ -5,8 +5,8 @@ from arch import arch_model
 from hmmlearn.hmm import GaussianHMM
 
 # 1. 路径与列名映射
-INPUT_CSV = r"C:\Users\23168\Desktop\宁德时代标点\300750_宁德时代-历史数据.csv"
-OUTPUT_CSV = r"C:\Users\23168\Desktop\market_states_300750.csv"
+INPUT_CSV = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\002736_SZSE.csv"
+OUTPUT_CSV = r"D:\Anaconda3\Quant\Stock_Quant\Structure_selfbuilt\data\market_states_002736_SZSE.csv"
 
 COLUMN_MAP = {
     "交易日期": "date",

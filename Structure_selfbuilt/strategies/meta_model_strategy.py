@@ -9,45 +9,36 @@ from tensorflow.keras.models import load_model
 import tensorflow as tf
 
 from strategies.base_strategy import BaseStrategy
-
 from tensorflow.keras.layers import InputLayer
 
 
 class CompatibleInputLayer(InputLayer):
     """兼容包含 batch_shape 配置的 InputLayer."""
-
     def __init__(self, *args, **kwargs):
-        # 把老模型配置里传进来的 batch_shape 拿出来
         batch_shape = kwargs.pop("batch_shape", None)
-
-        # 如果有 batch_shape 且没显式给 input_shape，就自己推一个
-        # 比如 batch_shape = (None, 60, 5) => input_shape = (60, 5)
         if batch_shape is not None and "input_shape" not in kwargs and len(batch_shape) > 1:
             kwargs["input_shape"] = tuple(batch_shape[1:])
-
-        # 交给原来的 InputLayer 处理
         super().__init__(*args, **kwargs)
 
-# 新增：兼容 DTypePolicy
 
+# 新增：兼容 DTypePolicy
 from tensorflow.keras.mixed_precision import Policy as BasePolicy
 
 
 class DTypePolicy(BasePolicy):
-    """
-    兼容模型里使用的 'DTypePolicy'。
-    继承自 tf.keras.mixed_precision.Policy，让反序列化时能找到这个类。
-    """
+    """兼容模型里使用的 'DTypePolicy'。"""
     pass
 
+
 # 禁用 TensorFlow 的非错误日志
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 # 配置日志管理
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('PIL').setLevel(logging.WARNING)
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
+logging.getLogger("PIL").setLevel(logging.WARNING)
+
 
 # ==================== Transformer 模型 ==================== #
 class SimpleTransformer(nn.Module):
@@ -64,143 +55,129 @@ class SimpleTransformer(nn.Module):
         x = self.input_fc(x)
         x = self.transformer_encoder(x)
         x_last = x[:, -1, :]
-        out = self.output_fc(x_last)  # 直接回归输出
+        out = self.output_fc(x_last)  # 直接回归输出（通常是 scaled / ret / logret）
         return out
 
+
 class TransformerModel:
-    def __init__(self, model_path='utils/models/transformer_model_state_dict.pt', lookback=60,
-                 scaler_path=None):
-        """
-        如果有对 y(收盘价) 做缩放，就传入 scaler_path，
-        并在预测后做 inverse_transform。
-        """
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def __init__(self, model_path="utils/models/transformer_model_state_dict.pt", lookback=60, scaler_path=None):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model_path = os.path.abspath(model_path)
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Transformer 模型文件不存在: {model_path}")
+
         self.model = SimpleTransformer().to(self.device)
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
-        self.lookback = lookback
 
-        # 如果有保存好的 y-scaler，这里加载
+        self.lookback = lookback
         self.scaler_y = None
         if scaler_path and os.path.exists(scaler_path):
             self.scaler_y = load(scaler_path)
             logger.info(f"Loaded y-scaler from {scaler_path}")
 
-    def predict(self, df_window: pd.DataFrame) -> float:
+    def predict_raw(self, df_window: pd.DataFrame) -> float:
+        """
+        返回模型原始输出：可能是 scaled / return / log-return
+        不做价格还原。
+        """
         if len(df_window) < self.lookback:
             return np.nan
 
-        if df_window[['open', 'high', 'low', 'close', 'vol']].isna().any().any():
+        if df_window[["open", "high", "low", "close", "vol"]].isna().any().any():
             logger.warning("TransformerModel 预测时窗口数据出现 NaN，返回 NaN")
             return np.nan
 
-        data = df_window[['open', 'high', 'low', 'close', 'vol']].iloc[-self.lookback:].values
+        data = df_window[["open", "high", "low", "close", "vol"]].iloc[-self.lookback:].values
         data_torch = torch.tensor(data, dtype=torch.float32).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            pred_scaled = self.model(data_torch)[0, 0].item()
+            pred = self.model(data_torch)[0, 0].item()
 
-        # 如果训练时对 y 做了缩放，就反标
+        # 如果训练时对 y 做了缩放，这里反标（仍是“原始量”的反标）
         if self.scaler_y is not None:
-            # scaler_y.inverse_transform 需要 2D
-            pred_real = self.scaler_y.inverse_transform([[pred_scaled]])[0][0]
-            return float(pred_real)
-        else:
-            return float(pred_scaled)
+            pred = self.scaler_y.inverse_transform([[pred]])[0][0]
+
+        return float(pred)
+
 
 # ==================== LSTM 模型 ==================== #
 class LSTMModel:
-    def __init__(self, model_path='utils/models/lstm_model.h5', lookback=60,
-                 scaler_path=None):
-        self.device = '/GPU:0' if torch.cuda.is_available() else '/CPU:0'
+    def __init__(self, model_path="utils/models/lstm_model.h5", lookback=60, scaler_path=None):
+        self.device = "/GPU:0" if torch.cuda.is_available() else "/CPU:0"
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"LSTM 模型文件不存在: {model_path}")
+
         self.model = load_model(
-    model_path,
-    custom_objects={
-        "InputLayer": CompatibleInputLayer,
-        "DTypePolicy": DTypePolicy,
-    },
-    compile=False,
-)
+            model_path,
+            custom_objects={
+                "InputLayer": CompatibleInputLayer,
+                "DTypePolicy": DTypePolicy,
+            },
+            compile=False,
+        )
         self.lookback = lookback
 
-        # 如果有保存好的 y-scaler
         self.scaler_y = None
         if scaler_path and os.path.exists(scaler_path):
             self.scaler_y = load(scaler_path)
             logger.info(f"Loaded y-scaler from {scaler_path}")
 
-    def predict(self, df_window: pd.DataFrame) -> float:
+    def predict_raw(self, df_window: pd.DataFrame) -> float:
+        """
+        返回模型原始输出：可能是 scaled / return / log-return
+        不做价格还原。
+        """
         if len(df_window) < self.lookback:
             return np.nan
 
-        if df_window[['open', 'high', 'low', 'close', 'vol']].isna().any().any():
+        if df_window[["open", "high", "low", "close", "vol"]].isna().any().any():
             logger.warning("LSTMModel 预测时窗口数据出现 NaN，返回 NaN")
             return np.nan
 
-        data = df_window[['open','high','low','close','vol']].iloc[-self.lookback:].values
-        data = np.expand_dims(data, axis=0)  # shape: (1, lookback, 5)
+        data = df_window[["open", "high", "low", "close", "vol"]].iloc[-self.lookback:].values
+        data = np.expand_dims(data, axis=0)  # (1, lookback, 5)
 
         with tf.device(self.device):
-            pred_scaled = self.model.predict(data, verbose=0)[0][0]
+            pred = self.model.predict(data, verbose=0)[0][0]
 
-        # 若有 scaler_y, 做反标
         if self.scaler_y is not None:
-            pred_real = self.scaler_y.inverse_transform([[pred_scaled]])[0][0]
-            return float(pred_real)
-        else:
-            return float(pred_scaled)
+            pred = self.scaler_y.inverse_transform([[pred]])[0][0]
+
+        return float(pred)
 
 
 # ==================== HMM 模型 ==================== #
 class HMMModel:
-    def __init__(self, model_path='utils/models/hmm_model.pkl', lookback=60,
-                 scaler_path=None):
-        """
-        如果你想让HMM输出价格，需要有“回归HMM”的思路或把状态映射到close均值。
-        """
+    def __init__(self, model_path="utils/models/hmm_model.pkl", lookback=60, scaler_path=None):
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"HMM 模型文件不存在: {model_path}")
-        self.model = load(model_path)  # 默认: GaussianHMM (无监督)
+        self.model = load(model_path)  # GaussianHMM
         self.lookback = lookback
         self.scaler_y = None
         if scaler_path and os.path.exists(scaler_path):
             self.scaler_y = load(scaler_path)
             logger.info(f"Loaded y-scaler from {scaler_path}")
 
-    def predict(self, df_window: pd.DataFrame) -> float:
+    def predict_price(self, df_window: pd.DataFrame) -> float:
         """
-        如果你直接用 .predict(data)，只会得到状态序列，如 [0,1,1,0...].
-        这里演示一种“用最后时刻状态 -> 取close均值”来近似输出价格。
+        HMM：用最后状态的 means_[state][3] 近似 close（你的写法本来就是 price 级别）
         """
         if len(df_window) < self.lookback:
             return np.nan
-        if df_window[['open', 'high', 'low', 'close', 'vol']].isna().any().any():
+        if df_window[["open", "high", "low", "close", "vol"]].isna().any().any():
             logger.warning("HMMModel 预测时窗口数据出现 NaN，返回 NaN")
             return np.nan
 
-        data = df_window[['open', 'high', 'low', 'close', 'vol']].iloc[-self.lookback:].values
-
-        # 先获得最后时刻的状态
-        state_seq = self.model.predict(data)  # shape=(lookback,)
+        data = df_window[["open", "high", "low", "close", "vol"]].iloc[-self.lookback:].values
+        state_seq = self.model.predict(data)
         last_state = state_seq[-1]
+        mean_vec = self.model.means_[last_state]
+        pred = mean_vec[3]  # close 均值
 
-        # 在 model.means_ 中，每个 state 有一个均值向量 (5维)
-        # 其中第0维=avg open, 第1维=avg high, 第2维=avg low, 第3维=avg close, 第4维=avg vol
-        # 你可选用第3维(对应 close)当“预测值”
-        # 这只是一种简单映射，未必是真正的回归预测。
-        mean_vec = self.model.means_[last_state]  # shape=(5,)
-        pred_scaled = mean_vec[3]  # 第3个下标表示 close
-
-        # 如果你对 close 做过缩放，这里反标
         if self.scaler_y is not None:
-            pred_real = self.scaler_y.inverse_transform([[pred_scaled]])[0][0]
-            return float(pred_real)
-        else:
-            return float(pred_scaled)
+            pred = self.scaler_y.inverse_transform([[pred]])[0][0]
+
+        return float(pred)
 
 
 # ==================== MetaModelStrategy ==================== #
@@ -209,66 +186,89 @@ class MetaModelStrategy(BaseStrategy):
 
     def __init__(
         self,
-        lstm_path='utils/models/lstm_model.h5',
-        hmm_path='utils/models/hmm_model.pkl',
-        transformer_path='utils/models/transformer_model_state_dict.pt',
+        lstm_path="utils/models/lstm_model.h5",
+        hmm_path="utils/models/hmm_model.pkl",
+        transformer_path="utils/models/transformer_model_state_dict.pt",
         error_threshold=0.05,
         submodel_threshold=0.02,
-        lookback=60,  # 确保这个参数存在
+        lookback=60,
         scaler_path=None,
-        selection_mode='three_models'
+        selection_mode="three_models",
+        pred_kind="logret",   # ✅ 新增：logret / ret / price
+        clip_ret=0.30,        # ✅ 新增：避免爆炸（logret/ret裁剪幅度）
     ):
-        self.lookback = lookback  # 这里确保 lookback 被正确存储
+        """
+        pred_kind:
+          - "logret": 子模型输出 = log-return（推荐）
+          - "ret":    子模型输出 = return
+          - "price":  子模型输出 = price（你确认模型就是价格才用）
+        """
+        self.lookback = lookback
         self.lstm_model = LSTMModel(model_path=lstm_path, lookback=lookback, scaler_path=scaler_path)
         self.hmm_model = HMMModel(model_path=hmm_path, lookback=lookback, scaler_path=scaler_path)
         self.transformer_model = TransformerModel(model_path=transformer_path, lookback=lookback, scaler_path=scaler_path)
+
         self.error_threshold = error_threshold
         self.submodel_threshold = submodel_threshold
         self.selection_mode = selection_mode
 
+        self.pred_kind = str(pred_kind).lower()
+        self.clip_ret = float(clip_ret)
+
     def _select_submodel(self, df_window: pd.DataFrame) -> str:
-        # 若数据不足则默认返回某个模型
         if len(df_window) < self.lookback:
             return "LSTM"
 
-        # ========== 示例：因子计算（可根据实际需求修改） ==========
-        # 1) 全部窗口的收益率波动率
-        returns = df_window['close'].pct_change().dropna()
+        returns = df_window["close"].pct_change().dropna()
         volatility = returns.std()
 
-        # 2) 5日简单移动平均 vs 最后一根K线的收盘价
-        ma_5 = df_window['close'].rolling(window=5).mean().iloc[-1]
-        last_close = df_window['close'].iloc[-1]
+        ma_5 = df_window["close"].rolling(window=5).mean().iloc[-1]
+        last_close = df_window["close"].iloc[-1]
 
-        # ========== 根据因子进行策略选择，结合 selection_mode 区分可选模型 ==========
-        # 示例：如果波动较大且当前价 < 5日均价倾向 Transformer，否则根据情况在剩余模型中作选择
         if (volatility > 0.02) and (last_close < ma_5):
-            if self.selection_mode == 'lstm_hmm':
+            if self.selection_mode == "lstm_hmm":
                 return "HMM"
-            elif self.selection_mode == 'lstm_transformer':
+            elif self.selection_mode == "lstm_transformer":
                 return "Transformer"
-            elif self.selection_mode == 'hmm_transformer':
+            elif self.selection_mode == "hmm_transformer":
                 return "Transformer"
-            else:  # 'three_models'
+            else:
                 return "Transformer"
         elif (volatility < 0.01) and (last_close > ma_5):
-            if self.selection_mode == 'lstm_hmm':
+            if self.selection_mode in ("lstm_hmm", "lstm_transformer"):
                 return "LSTM"
-            elif self.selection_mode == 'lstm_transformer':
-                return "LSTM"
-            elif self.selection_mode == 'hmm_transformer':
+            elif self.selection_mode == "hmm_transformer":
                 return "HMM"
-            else:  # 'three_models'
+            else:
                 return "LSTM"
         else:
-            if self.selection_mode == 'lstm_transformer':
+            if self.selection_mode == "lstm_transformer":
                 return "Transformer"
-            elif self.selection_mode == 'hmm_transformer':
+            elif self.selection_mode in ("hmm_transformer", "lstm_hmm"):
                 return "HMM"
-            elif self.selection_mode == 'lstm_hmm':
+            else:
                 return "HMM"
-            else:  # 'three_models'
-                return "HMM"
+
+    def _to_price(self, raw_pred: float, last_close: float) -> float:
+        """
+        把子模型输出统一还原成“预测 close 价格”
+        """
+        if raw_pred is None or np.isnan(raw_pred) or np.isnan(last_close):
+            return np.nan
+
+        if self.pred_kind == "price":
+            return float(raw_pred)
+
+        # logret / ret 做裁剪，避免异常点把 exp 撑爆
+        r = float(np.clip(raw_pred, -self.clip_ret, self.clip_ret))
+
+        if self.pred_kind == "logret":
+            return float(last_close * np.exp(r))
+        elif self.pred_kind == "ret":
+            return float(last_close * (1.0 + r))
+        else:
+            # 兜底：当成 logret
+            return float(last_close * np.exp(r))
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         MetaModelStrategy.call_count += 1
@@ -276,35 +276,35 @@ class MetaModelStrategy(BaseStrategy):
         total_steps = len(df)
 
         for i in range(total_steps):
-            # 若当前 i < self.lookback，就无法拿到 60 条历史
             if i < self.lookback:
                 pred_price_series.iloc[i] = np.nan
                 continue
 
-            # 用最近 60 条做窗口
-            # 即 [i - lookback, i)
             current_data = df.iloc[i - self.lookback:i].copy()
+            last_close = float(current_data["close"].iloc[-1])
 
-            # 然后根据子模型来预测
             chosen_model = self._select_submodel(current_data)
+
             if chosen_model == "LSTM":
-                predicted_price = self.lstm_model.predict(current_data)
+                raw = self.lstm_model.predict_raw(current_data)
+                predicted_price = self._to_price(raw, last_close)
+
             elif chosen_model == "HMM":
-                predicted_price = self.hmm_model.predict(current_data)
+                # HMM 你原本就是 price 级别输出（close均值）
+                predicted_price = self.hmm_model.predict_price(current_data)
+
             else:  # Transformer
-                predicted_price = self.transformer_model.predict(current_data)
+                raw = self.transformer_model.predict_raw(current_data)
+                predicted_price = self._to_price(raw, last_close)
 
             pred_price_series.iloc[i] = predicted_price
-            # logger.debug(f"Index={i}, chosen_model={chosen_model}, predicted_price={predicted_price}")
 
-        # 对预测结果做一个简单平滑 (可选)
+        # 平滑
         pred_price_series = pred_price_series.rolling(window=3, min_periods=1).mean()
 
-        # ========== 调试打印对比 ==========
+        # 调试对比
         logger.debug("==== Checking real close & predicted price (tail 10) ====")
-        close_tail = df['close'].tail(10)
-        pred_tail = pred_price_series.tail(10)
-        logger.debug(f"Real Close:\n{close_tail}")
-        logger.debug(f"Predicted Price:\n{pred_tail}")
+        logger.debug(f"Real Close:\n{df['close'].tail(10)}")
+        logger.debug(f"Predicted Price:\n{pred_price_series.tail(10)}")
 
         return pred_price_series

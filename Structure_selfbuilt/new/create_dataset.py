@@ -4,8 +4,8 @@ from sklearn.model_selection import train_test_split
 from new.regime_hmm import compute_states_from_df
 
 # 输入和输出文件路径
-INPUT_CSV = r"data\601788_SH.csv"
-OUTPUT_CSV = r"data\market_states_601788_SH.csv"
+INPUT_CSV = r"data\002736_SZSE.csv"
+OUTPUT_CSV = r"data\market_states_002736_SZSE.csv"
 
 def create_sliding_window_dataset(df, N, H):
     """
